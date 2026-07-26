@@ -5,8 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldCheck, Network } from "lucide-react";
+import { ShieldCheck, Network, RotateCcw } from "lucide-react";
+import { useAppStore, useSession } from "@/lib/store";
+import { getUser } from "@/services/userService";
+import { hasPermission } from "@/lib/authz";
+import { AccessDenied } from "@/components/access-denied";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "الإعدادات — منظومة التكليفات" }] }),
@@ -14,6 +20,10 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
+  const user = getUser(useSession((s) => s.currentUserId));
+  const resetDemo = useAppStore((s) => s.resetDemo);
+  if (!user || !hasPermission(user, "manage_permissions")) return <AccessDenied />;
+
   return (
     <AppShell>
       <PageHeader title="إعدادات النظام" subtitle="ضوابط الأمان والاستخدام الداخلي" />
@@ -45,9 +55,8 @@ function SettingsPage() {
           <CardContent className="space-y-3 text-sm">
             <div className="flex items-center justify-between"><span>آخر نسخة احتياطية</span><span className="text-muted-foreground">اليوم — 03:00 صباحاً</span></div>
             <div className="flex items-center justify-between"><Label>الاحتفاظ بسجل التدقيق</Label>
-              <Select defaultValue="365"><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="180">180 يوم</SelectItem><SelectItem value="365">سنة</SelectItem><SelectItem value="1825">5 سنوات</SelectItem></SelectContent></Select>
+              <Select defaultValue="1825"><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="365">سنة</SelectItem><SelectItem value="1825">5 سنوات</SelectItem></SelectContent></Select>
             </div>
-            <div className="flex items-center justify-between"><Label>تمكين تكليفات سرية</Label><Switch defaultChecked /></div>
           </CardContent>
         </Card>
 
@@ -63,6 +72,19 @@ function SettingsPage() {
             <div className="text-xs text-muted-foreground">
               يعمل النظام حصراً ضمن الشبكة الداخلية للجهة، ولا يقبل اتصالاً من خارج بوابة VPN المعتمدة.
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2 border-destructive/30">
+          <CardHeader><CardTitle className="text-base text-destructive">إعادة تعيين البيانات التجريبية</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              يؤدي هذا الإجراء إلى مسح كل البيانات المخزنة محلياً وإعادة تحميل بيانات الاختبار الأولية. يُستخدم لتجربة الميزات من الصفر.
+            </p>
+            <Button variant="destructive" onClick={() => {
+              if (!confirm("سيتم مسح جميع التغييرات المحلية. متابعة؟")) return;
+              resetDemo(); toast.success("تمت إعادة التهيئة");
+            }}><RotateCcw className="h-4 w-4 me-1" /> إعادة التهيئة</Button>
           </CardContent>
         </Card>
       </div>

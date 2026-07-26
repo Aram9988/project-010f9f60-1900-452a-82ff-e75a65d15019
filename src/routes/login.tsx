@@ -8,6 +8,7 @@ import { authService } from "@/services/authService";
 import { useSession } from "@/lib/store";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { Logo } from "@/components/logo";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "تسجيل الدخول — منظومة إدارة التكليفات" }] }),
@@ -30,7 +31,7 @@ function LoginPage() {
     <div className="min-h-screen grid md:grid-cols-2 bg-background">
       <div className="hidden md:flex flex-col justify-between bg-primary text-primary-foreground p-10">
         <div>
-          <div className="grid h-14 w-14 place-items-center rounded-xl bg-primary-foreground/15 font-black text-xl">و.د</div>
+          <Logo size={64} className="bg-primary-foreground/15" showFallbackLetters={false} />
           <div className="mt-6">
             <div className="text-sm opacity-90">وزارة الداخلية</div>
             <div className="text-lg font-bold">قيادة الأمن الداخلي</div>
@@ -51,6 +52,13 @@ function LoginPage() {
 
       <div className="flex items-center justify-center p-6">
         <form onSubmit={onSubmit} className="w-full max-w-sm space-y-5">
+          <div className="md:hidden flex items-center gap-3">
+            <Logo size={44} />
+            <div>
+              <div className="text-[11px] text-muted-foreground">وزارة الداخلية · قيادة الأمن الداخلي</div>
+              <div className="text-sm font-bold">فرع اتصالات ريف دمشق</div>
+            </div>
+          </div>
           <div>
             <h1 className="text-2xl font-black">تسجيل الدخول</h1>
             <p className="text-sm text-muted-foreground mt-1">أدخل بيانات حسابك المخصص من إدارة النظام.</p>
@@ -72,7 +80,7 @@ function LoginPage() {
             لا يتوفر التسجيل الذاتي. تُنشأ الحسابات من قِبل مدير النظام.
           </p>
           <div className="rounded-md bg-muted p-3 text-[11px] text-muted-foreground">
-            نموذج تجريبي — يمكنك استخدام: <code>boss</code>, <code>associate</code>, <code>office</code>, <code>head1</code>–<code>head4</code>, <code>emp1</code>–<code>emp4</code>, <code>admin</code>
+            نموذج تجريبي — استخدم زر تبديل الدور في الأعلى للتنقل بين المستخدمين.
           </div>
         </form>
       </div>

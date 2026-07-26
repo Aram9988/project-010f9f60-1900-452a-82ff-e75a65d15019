@@ -16,12 +16,14 @@ import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DepartmentsRouteImport } from './routes/departments'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
 import { Route as TasksMineRouteImport } from './routes/tasks.mine'
+import { Route as TasksArchivedRouteImport } from './routes/tasks.archived'
 import { Route as TasksTaskIdRouteImport } from './routes/tasks.$taskId'
 import { Route as ReportsReportIdRouteImport } from './routes/reports.$reportId'
 
@@ -60,6 +62,11 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuditRoute = AuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -90,6 +97,11 @@ const TasksMineRoute = TasksMineRouteImport.update({
   path: '/tasks/mine',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TasksArchivedRoute = TasksArchivedRouteImport.update({
+  id: '/tasks/archived',
+  path: '/tasks/archived',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TasksTaskIdRoute = TasksTaskIdRouteImport.update({
   id: '/tasks/$taskId',
   path: '/tasks/$taskId',
@@ -104,6 +116,7 @@ const ReportsReportIdRoute = ReportsReportIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audit': typeof AuditRoute
+  '/change-password': typeof ChangePasswordRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
   '/login': typeof LoginRoute
@@ -113,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof UsersRoute
   '/reports/$reportId': typeof ReportsReportIdRoute
   '/tasks/$taskId': typeof TasksTaskIdRoute
+  '/tasks/archived': typeof TasksArchivedRoute
   '/tasks/mine': typeof TasksMineRoute
   '/tasks/new': typeof TasksNewRoute
   '/reports/': typeof ReportsIndexRoute
@@ -121,6 +135,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit': typeof AuditRoute
+  '/change-password': typeof ChangePasswordRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
   '/login': typeof LoginRoute
@@ -130,6 +145,7 @@ export interface FileRoutesByTo {
   '/users': typeof UsersRoute
   '/reports/$reportId': typeof ReportsReportIdRoute
   '/tasks/$taskId': typeof TasksTaskIdRoute
+  '/tasks/archived': typeof TasksArchivedRoute
   '/tasks/mine': typeof TasksMineRoute
   '/tasks/new': typeof TasksNewRoute
   '/reports': typeof ReportsIndexRoute
@@ -139,6 +155,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/audit': typeof AuditRoute
+  '/change-password': typeof ChangePasswordRoute
   '/dashboard': typeof DashboardRoute
   '/departments': typeof DepartmentsRoute
   '/login': typeof LoginRoute
@@ -148,6 +165,7 @@ export interface FileRoutesById {
   '/users': typeof UsersRoute
   '/reports/$reportId': typeof ReportsReportIdRoute
   '/tasks/$taskId': typeof TasksTaskIdRoute
+  '/tasks/archived': typeof TasksArchivedRoute
   '/tasks/mine': typeof TasksMineRoute
   '/tasks/new': typeof TasksNewRoute
   '/reports/': typeof ReportsIndexRoute
@@ -158,6 +176,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/audit'
+    | '/change-password'
     | '/dashboard'
     | '/departments'
     | '/login'
@@ -167,6 +186,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/reports/$reportId'
     | '/tasks/$taskId'
+    | '/tasks/archived'
     | '/tasks/mine'
     | '/tasks/new'
     | '/reports/'
@@ -175,6 +195,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/audit'
+    | '/change-password'
     | '/dashboard'
     | '/departments'
     | '/login'
@@ -184,6 +205,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/reports/$reportId'
     | '/tasks/$taskId'
+    | '/tasks/archived'
     | '/tasks/mine'
     | '/tasks/new'
     | '/reports'
@@ -192,6 +214,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/audit'
+    | '/change-password'
     | '/dashboard'
     | '/departments'
     | '/login'
@@ -201,6 +224,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/reports/$reportId'
     | '/tasks/$taskId'
+    | '/tasks/archived'
     | '/tasks/mine'
     | '/tasks/new'
     | '/reports/'
@@ -210,6 +234,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuditRoute: typeof AuditRoute
+  ChangePasswordRoute: typeof ChangePasswordRoute
   DashboardRoute: typeof DashboardRoute
   DepartmentsRoute: typeof DepartmentsRoute
   LoginRoute: typeof LoginRoute
@@ -219,6 +244,7 @@ export interface RootRouteChildren {
   UsersRoute: typeof UsersRoute
   ReportsReportIdRoute: typeof ReportsReportIdRoute
   TasksTaskIdRoute: typeof TasksTaskIdRoute
+  TasksArchivedRoute: typeof TasksArchivedRoute
   TasksMineRoute: typeof TasksMineRoute
   TasksNewRoute: typeof TasksNewRoute
   ReportsIndexRoute: typeof ReportsIndexRoute
@@ -276,6 +302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/audit': {
       id: '/audit'
       path: '/audit'
@@ -318,6 +351,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksMineRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tasks/archived': {
+      id: '/tasks/archived'
+      path: '/tasks/archived'
+      fullPath: '/tasks/archived'
+      preLoaderRoute: typeof TasksArchivedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tasks/$taskId': {
       id: '/tasks/$taskId'
       path: '/tasks/$taskId'
@@ -338,6 +378,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditRoute: AuditRoute,
+  ChangePasswordRoute: ChangePasswordRoute,
   DashboardRoute: DashboardRoute,
   DepartmentsRoute: DepartmentsRoute,
   LoginRoute: LoginRoute,
@@ -347,6 +388,7 @@ const rootRouteChildren: RootRouteChildren = {
   UsersRoute: UsersRoute,
   ReportsReportIdRoute: ReportsReportIdRoute,
   TasksTaskIdRoute: TasksTaskIdRoute,
+  TasksArchivedRoute: TasksArchivedRoute,
   TasksMineRoute: TasksMineRoute,
   TasksNewRoute: TasksNewRoute,
   ReportsIndexRoute: ReportsIndexRoute,

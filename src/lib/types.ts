@@ -4,6 +4,7 @@ export type Role =
   | "office"
   | "dept_head"
   | "employee"
+  | "diwan"
   | "admin";
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -12,6 +13,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   office: "مسؤول المكتب",
   dept_head: "رئيس القسم",
   employee: "موظف",
+  diwan: "الديوان",
   admin: "مدير النظام",
 };
 
@@ -19,7 +21,10 @@ export interface Department {
   id: string;
   name: string;
   short: string;
+  code?: string;
   headId: string;
+  officeResponsibleId?: string;
+  archived?: boolean;
 }
 
 export interface User {
@@ -30,6 +35,8 @@ export interface User {
   rank?: string;
   username: string;
   avatarColor?: string;
+  active?: boolean;
+  archived?: boolean;
 }
 
 export type TaskStatus =
@@ -92,6 +99,11 @@ export interface Attachment {
   name: string;
   kind: "image" | "pdf" | "word" | "excel" | "drawing" | "screenshot";
   size: string;
+  mime?: string;
+  dataUrl?: string;
+  uploadedById?: string;
+  uploadedAt?: string;
+  commentId?: string;
 }
 
 export interface Comment {
@@ -128,14 +140,18 @@ export type ActivityType =
   | "reply_added"
   | "formal_instruction_issued"
   | "instruction_acknowledged"
-  | "deadline_changed"
   | "file_uploaded"
+  | "file_removed"
   | "progress_updated"
   | "task_submitted"
   | "task_returned"
   | "task_approved"
   | "comment_hidden"
-  | "status_changed";
+  | "status_changed"
+  | "task_archived"
+  | "task_restored"
+  | "task_deleted"
+  | "update_posted";
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   task_created: "إنشاء التكليف",
@@ -145,14 +161,18 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   reply_added: "إضافة رد",
   formal_instruction_issued: "إصدار توجيه رسمي",
   instruction_acknowledged: "تأكيد استلام توجيه",
-  deadline_changed: "تعديل المهلة",
   file_uploaded: "رفع مرفق",
+  file_removed: "حذف مرفق",
   progress_updated: "تحديث نسبة الإنجاز",
   task_submitted: "تقديم للمراجعة",
   task_returned: "إعادة للتعديل",
   task_approved: "اعتماد وإنهاء",
   comment_hidden: "إخفاء تعليق",
   status_changed: "تغيير الحالة",
+  task_archived: "أرشفة التكليف",
+  task_restored: "استعادة التكليف",
+  task_deleted: "حذف التكليف",
+  update_posted: "تحديث تنفيذي",
 };
 
 export interface ActivityEvent {
@@ -175,7 +195,6 @@ export interface Task {
   assigneeId?: string;
   participantIds: string[];
   issuedAt: string;
-  dueAt: string;
   priority: TaskPriority;
   status: TaskStatus;
   progress: number;
@@ -186,7 +205,12 @@ export interface Task {
   completionSummary?: string;
   approvedById?: string;
   approvedAt?: string;
-  confidential?: boolean;
+  archived?: boolean;
+  archivedById?: string;
+  archivedAt?: string;
+  archiveReason?: string;
+  deletedById?: string;
+  deletedAt?: string;
 }
 
 export type NotificationType =
@@ -198,8 +222,13 @@ export type NotificationType =
   | "returned"
   | "submitted"
   | "approved"
-  | "deadline"
-  | "overdue";
+  | "update"
+  | "archive"
+  | "restore"
+  | "attachment"
+  | "password_request"
+  | "password_changed"
+  | "comment";
 
 export interface AppNotification {
   id: string;
@@ -220,4 +249,100 @@ export interface AuditEntry {
   action: ActivityType;
   detail?: string;
   createdAt: string;
+}
+
+// ---------- Permissions ----------
+export type Permission =
+  | "view_all_tasks"
+  | "view_department_tasks"
+  | "create_task"
+  | "assign_task"
+  | "acknowledge_task"
+  | "update_task"
+  | "comment"
+  | "issue_formal_instruction"
+  | "acknowledge_instruction"
+  | "upload_attachment"
+  | "submit_task"
+  | "return_task"
+  | "approve_task"
+  | "delete_task"
+  | "restore_task"
+  | "permanently_delete_task"
+  | "view_archived_tasks"
+  | "view_reports"
+  | "export_reports"
+  | "manage_departments"
+  | "manage_users"
+  | "manage_permissions"
+  | "view_audit";
+
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  view_all_tasks: "عرض جميع التكليفات",
+  view_department_tasks: "عرض تكليفات القسم",
+  create_task: "إنشاء تكليف",
+  assign_task: "إسناد التكليفات",
+  acknowledge_task: "تأكيد استلام التكليف",
+  update_task: "تحديث التكليف",
+  comment: "إضافة تعليق",
+  issue_formal_instruction: "إصدار توجيه رسمي",
+  acknowledge_instruction: "تأكيد استلام توجيه",
+  upload_attachment: "رفع المرفقات",
+  submit_task: "تقديم التكليف للاعتماد",
+  return_task: "إعادة التكليف للتعديل",
+  approve_task: "اعتماد التكليف",
+  delete_task: "حذف / أرشفة التكليف",
+  restore_task: "استعادة التكليف المؤرشف",
+  permanently_delete_task: "حذف نهائي (إداري)",
+  view_archived_tasks: "عرض المؤرشفات",
+  view_reports: "عرض التقارير",
+  export_reports: "طباعة وتصدير التقارير",
+  manage_departments: "إدارة الأقسام",
+  manage_users: "إدارة المستخدمين",
+  manage_permissions: "إدارة الصلاحيات",
+  view_audit: "عرض سجل التدقيق",
+};
+
+export const ALL_PERMISSIONS: Permission[] = Object.keys(PERMISSION_LABELS) as Permission[];
+
+export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
+  boss: [
+    "view_all_tasks","create_task","assign_task","comment","issue_formal_instruction",
+    "upload_attachment","submit_task","return_task","approve_task","delete_task",
+    "restore_task","view_archived_tasks","view_reports","export_reports","view_audit",
+  ],
+  associate: [
+    "view_all_tasks","create_task","assign_task","comment","issue_formal_instruction",
+    "upload_attachment","submit_task","return_task","approve_task","delete_task",
+    "restore_task","view_archived_tasks","view_reports","export_reports","view_audit",
+  ],
+  office: [
+    "view_department_tasks","create_task","assign_task","comment","upload_attachment",
+    "view_reports","export_reports",
+  ],
+  dept_head: [
+    "view_department_tasks","acknowledge_task","update_task","comment",
+    "acknowledge_instruction","upload_attachment","submit_task","view_reports",
+  ],
+  employee: [
+    "view_department_tasks","acknowledge_task","update_task","comment",
+    "acknowledge_instruction","upload_attachment",
+  ],
+  diwan: [
+    "view_reports","export_reports",
+  ],
+  admin: [
+    "manage_departments","manage_users","manage_permissions","view_audit",
+    "view_reports","export_reports",
+  ],
+};
+
+// ---------- Password Requests ----------
+export interface PasswordChangeRequest {
+  id: string;
+  userId: string;
+  requestedById: string;
+  createdAt: string;
+  status: "pending" | "resolved" | "cancelled";
+  resolvedAt?: string;
 }

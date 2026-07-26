@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { reportService } from "@/services/reportService";
-import { departmentService } from "@/services/departmentService";
+import { REPORTS } from "@/services/reportService";
 import { FileBarChart2 } from "lucide-react";
+import { useSession } from "@/lib/store";
+import { getUser } from "@/services/userService";
+import { hasPermission } from "@/lib/authz";
+import { AccessDenied } from "@/components/access-denied";
 
 export const Route = createFileRoute("/reports/")({
   head: () => ({ meta: [{ title: "التقارير — منظومة التكليفات" }] }),
@@ -15,21 +15,19 @@ export const Route = createFileRoute("/reports/")({
 });
 
 function ReportsPage() {
-  const { data: reports = [] } = useQuery({ queryKey: ["reports"], queryFn: () => reportService.list() });
-  const { data: depts = [] } = useQuery({ queryKey: ["depts"], queryFn: () => departmentService.list() });
+  const user = getUser(useSession((s) => s.currentUserId));
+  if (!user || !hasPermission(user, "view_reports")) return <AccessDenied />;
   return (
     <AppShell>
-      <PageHeader title="التقارير" subtitle="تقارير جاهزة للطباعة والاعتماد" />
-      <Card className="mb-6"><CardHeader><CardTitle className="text-base">فلاتر التقرير</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <Input type="date" />
-          <Input type="date" />
-          <Select><SelectTrigger><SelectValue placeholder="القسم" /></SelectTrigger><SelectContent>{depts.map(d=><SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select>
-          <Select><SelectTrigger><SelectValue placeholder="الأولوية" /></SelectTrigger><SelectContent><SelectItem value="all">الكل</SelectItem><SelectItem value="critical">عاجل جداً</SelectItem></SelectContent></Select>
+      <PageHeader title="التقارير" subtitle="تقارير قائمة على الأحداث الفعلية خلال الفترة المختارة" />
+      <Card className="mb-6">
+        <CardHeader><CardTitle className="text-base">أنواع التقارير</CardTitle></CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          كل تقرير يعرض فقط التكليفات التي شهدت نشاطاً خلال الفترة (إنشاء، توجيه، تحديث، اعتماد، ...). التكليفات التي لم تتحرك خلال الفترة لا تظهر.
         </CardContent>
       </Card>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {reports.map((r) => (
+        {REPORTS.map((r) => (
           <Link key={r.id} to="/reports/$reportId" params={{ reportId: r.id }}
             className="rounded-xl border bg-card p-4 hover:shadow-md transition-shadow">
             <div className="flex items-start gap-3">

@@ -28,9 +28,7 @@ export function fmtRelative(iso: string) {
   if (abs < day) return rtf.format(Math.round(diff / hr), "hour");
   return rtf.format(Math.round(diff / day), "day");
 }
-export function isOverdue(dueAt: string, status: string) {
-  return (
-    new Date(dueAt).getTime() < Date.now() &&
-    !["approved", "cancelled", "archived"].includes(status)
-  );
+export function fmtDay(iso: string) {
+  try { return new Intl.DateTimeFormat("ar-EG", { weekday: "long", day: "2-digit", month: "long" }).format(new Date(iso)); }
+  catch { return iso; }
 }

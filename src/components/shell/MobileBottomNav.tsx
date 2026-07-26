@@ -1,21 +1,30 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, ClipboardList, PlusCircle, Bell, UserCircle2 } from "lucide-react";
+import { LayoutDashboard, ClipboardList, PlusCircle, Bell, UserCircle2, FileBarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const items = [
-  { to: "/dashboard", label: "الرئيسية", icon: LayoutDashboard },
-  { to: "/tasks", label: "التكليفات", icon: ClipboardList },
-  { to: "/tasks/new", label: "إنشاء", icon: PlusCircle },
-  { to: "/notifications", label: "التنبيهات", icon: Bell },
-  { to: "/profile", label: "حسابي", icon: UserCircle2 },
-];
+import { useSession } from "@/lib/store";
+import { getUser } from "@/services/userService";
+import { hasPermission } from "@/lib/authz";
 
 export function MobileBottomNav() {
   const path = useRouterState({ select: (r) => r.location.pathname });
+  const uid = useSession((s) => s.currentUserId);
+  const user = getUser(uid);
+  const canOps = user && (hasPermission(user, "view_all_tasks") || hasPermission(user, "view_department_tasks"));
+  const canReports = user && hasPermission(user, "view_reports");
+
+  const items = [
+    canOps && { to: "/dashboard", label: "الرئيسية", icon: LayoutDashboard },
+    canOps && { to: "/tasks", label: "التكليفات", icon: ClipboardList },
+    user && hasPermission(user, "create_task") && { to: "/tasks/new", label: "إنشاء", icon: PlusCircle },
+    canReports && { to: "/reports", label: "التقارير", icon: FileBarChart2 },
+    { to: "/notifications", label: "التنبيهات", icon: Bell },
+    { to: "/profile", label: "حسابي", icon: UserCircle2 },
+  ].filter(Boolean) as { to: string; label: string; icon: any }[];
+
   return (
     <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card">
       <ul className="flex">
-        {items.map((it) => {
+        {items.slice(0, 5).map((it) => {
           const active = path === it.to;
           const Icon = it.icon;
           return (

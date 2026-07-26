@@ -10,26 +10,27 @@ import type {
 
 // ---------- Departments ----------
 export const departments: Department[] = [
-  { id: "d1", name: "قسم الدراسات والبنى التحتية", short: "الدراسات", headId: "u4" },
-  { id: "d2", name: "قسم الشبكات والأنظمة", short: "الشبكات", headId: "u5" },
-  { id: "d3", name: "قسم الصيانة والدعم الفني", short: "الصيانة", headId: "u6" },
-  { id: "d4", name: "قسم الاتصالات والتجهيزات", short: "الاتصالات", headId: "u7" },
+  { id: "d1", name: "قسم الدراسات والبنى التحتية", short: "الدراسات", code: "STD", headId: "u4", officeResponsibleId: "u3" },
+  { id: "d2", name: "قسم الشبكات والأنظمة", short: "الشبكات", code: "NET", headId: "u5", officeResponsibleId: "u3" },
+  { id: "d3", name: "قسم الصيانة والدعم الفني", short: "الصيانة", code: "MNT", headId: "u6" },
+  { id: "d4", name: "قسم الاتصالات والتجهيزات", short: "الاتصالات", code: "COM", headId: "u7" },
 ];
 
 // ---------- Users ----------
 export const users: User[] = [
-  { id: "u1", name: "العميد محمد الأحمد", role: "boss", username: "boss", rank: "عميد" },
-  { id: "u2", name: "العقيد سامر الحلبي", role: "associate", username: "associate", rank: "عقيد" },
-  { id: "u3", name: "الرائد ياسر الحسن", role: "office", username: "office", rank: "رائد" },
-  { id: "u4", name: "المقدم فادي شاهين", role: "dept_head", departmentId: "d1", username: "head1", rank: "مقدم" },
-  { id: "u5", name: "المقدم عمر الخطيب", role: "dept_head", departmentId: "d2", username: "head2", rank: "مقدم" },
-  { id: "u6", name: "الرائد بشار قاسم", role: "dept_head", departmentId: "d3", username: "head3", rank: "رائد" },
-  { id: "u7", name: "الرائد وسيم درويش", role: "dept_head", departmentId: "d4", username: "head4", rank: "رائد" },
-  { id: "u8", name: "الملازم أول أحمد سليمان", role: "employee", departmentId: "d1", username: "emp1", rank: "ملازم أول" },
-  { id: "u9", name: "الملازم كنان زيدان", role: "employee", departmentId: "d2", username: "emp2", rank: "ملازم" },
-  { id: "u10", name: "الرقيب حسان العلي", role: "employee", departmentId: "d3", username: "emp3", rank: "رقيب" },
-  { id: "u11", name: "الرقيب يزن العمر", role: "employee", departmentId: "d4", username: "emp4", rank: "رقيب" },
-  { id: "u12", name: "الرائد نور الدين خالد", role: "admin", username: "admin", rank: "رائد" },
+  { id: "u1", name: "العميد محمد الأحمد", role: "boss", username: "boss", rank: "عميد", active: true },
+  { id: "u2", name: "العقيد سامر الحلبي", role: "associate", username: "associate", rank: "عقيد", active: true },
+  { id: "u3", name: "الرائد ياسر الحسن", role: "office", username: "office", rank: "رائد", departmentId: "d1", active: true },
+  { id: "u4", name: "المقدم فادي شاهين", role: "dept_head", departmentId: "d1", username: "head1", rank: "مقدم", active: true },
+  { id: "u5", name: "المقدم عمر الخطيب", role: "dept_head", departmentId: "d2", username: "head2", rank: "مقدم", active: true },
+  { id: "u6", name: "الرائد بشار قاسم", role: "dept_head", departmentId: "d3", username: "head3", rank: "رائد", active: true },
+  { id: "u7", name: "الرائد وسيم درويش", role: "dept_head", departmentId: "d4", username: "head4", rank: "رائد", active: true },
+  { id: "u8", name: "الملازم أول أحمد سليمان", role: "employee", departmentId: "d1", username: "emp1", rank: "ملازم أول", active: true },
+  { id: "u9", name: "الملازم كنان زيدان", role: "employee", departmentId: "d2", username: "emp2", rank: "ملازم", active: true },
+  { id: "u10", name: "الرقيب حسان العلي", role: "employee", departmentId: "d3", username: "emp3", rank: "رقيب", active: true },
+  { id: "u11", name: "الرقيب يزن العمر", role: "employee", departmentId: "d4", username: "emp4", rank: "رقيب", active: true },
+  { id: "u12", name: "الرائد نور الدين خالد", role: "admin", username: "admin", rank: "رائد", active: true },
+  { id: "u13", name: "الملازم رائد الحمصي", role: "diwan", username: "diwan", rank: "ملازم", active: true },
 ];
 
 const now = new Date();
@@ -40,6 +41,9 @@ const daysFromNow = (n: number, h = 12) => {
   return d.toISOString();
 };
 
+// helpers to keep old records — dueAt has been removed from the model
+// so simply drop the field from every seed record below.
+
 // ---------- Tasks ----------
 export const tasks: Task[] = [
   {
@@ -48,7 +52,7 @@ export const tasks: Task[] = [
     description: "إعداد دراسة فنية شاملة لتمديد كابل ألياف ضوئية بطول تقريبي 4.2 كم مع مخطط المسار والتكلفة التقديرية.",
     issuedById: "u1", departmentId: "d1", deptHeadId: "u4", assigneeId: "u8",
     participantIds: ["u3"],
-    issuedAt: daysFromNow(-5, 9), dueAt: daysFromNow(4, 15),
+    issuedAt: daysFromNow(-5, 9),
     priority: "important", status: "in_progress", progress: 55,
     tags: ["دراسات", "بنى تحتية", "ألياف ضوئية"],
     attachments: [{ id: "a1", name: "مخطط_المسار_v2.pdf", kind: "pdf", size: "1.4MB" }],
@@ -65,7 +69,7 @@ export const tasks: Task[] = [
     description: "تركيب 8 كاميرات عالية الدقة مع مسجل NVR وربطها بغرفة العمليات.",
     issuedById: "u1", departmentId: "d4", deptHeadId: "u7", assigneeId: "u11",
     participantIds: [],
-    issuedAt: daysFromNow(-2, 10), dueAt: daysFromNow(-1, 16),
+    issuedAt: daysFromNow(-2, 10),
     priority: "urgent", status: "in_progress", progress: 40,
     tags: ["كاميرات", "تجهيزات"],
     attachments: [], subtasks: [
@@ -82,7 +86,7 @@ export const tasks: Task[] = [
     description: "انقطاع مؤقت في المقسم الرئيسي يستدعي تدخلاً فورياً وإعادة الخدمة.",
     issuedById: "u1", departmentId: "d3", deptHeadId: "u6", assigneeId: "u10",
     participantIds: ["u9"],
-    issuedAt: daysFromNow(0, 8), dueAt: daysFromNow(0, 20),
+    issuedAt: daysFromNow(0, 8),
     priority: "critical", status: "in_progress", progress: 70,
     tags: ["صيانة", "طارئ"],
     attachments: [], subtasks: [],
@@ -93,7 +97,7 @@ export const tasks: Task[] = [
     description: "تجهيز غرفة عمليات كاملة تشمل الشاشات، أجهزة الاتصال، والأثاث التشغيلي.",
     issuedById: "u2", departmentId: "d4", deptHeadId: "u7", assigneeId: "u11",
     participantIds: ["u3", "u4"],
-    issuedAt: daysFromNow(-10, 9), dueAt: daysFromNow(7, 15),
+    issuedAt: daysFromNow(-10, 9),
     priority: "important", status: "new", progress: 0,
     tags: ["غرف عمليات", "تجهيزات"],
     attachments: [], subtasks: [],
@@ -104,7 +108,7 @@ export const tasks: Task[] = [
     description: "تركيب خزانتين شبكيتين 42U مع تنظيم الكابلات وربط التغذية.",
     issuedById: "u1", departmentId: "d2", deptHeadId: "u5", assigneeId: "u9",
     participantIds: [],
-    issuedAt: daysFromNow(-14, 10), dueAt: daysFromNow(-3, 15),
+    issuedAt: daysFromNow(-14, 10),
     priority: "important", status: "submitted", progress: 100,
     tags: ["خزائن شبكية", "شبكات"],
     attachments: [{ id: "a2", name: "صور_التركيب.zip", kind: "image", size: "6.1MB" }],
@@ -116,7 +120,7 @@ export const tasks: Task[] = [
     description: "ترقية نظام تشغيل مقاسم Cisco إلى الإصدار المعتمد.",
     issuedById: "u2", departmentId: "d2", deptHeadId: "u5", assigneeId: "u9",
     participantIds: [],
-    issuedAt: daysFromNow(-3, 11), dueAt: daysFromNow(5, 15),
+    issuedAt: daysFromNow(-3, 11),
     priority: "normal", status: "received", progress: 10,
     tags: ["شبكات", "تحديث"],
     attachments: [], subtasks: [],
@@ -127,7 +131,7 @@ export const tasks: Task[] = [
     description: "قياس ميداني لتغطية الشبكة اللاسلكية في المبنى الرئيسي واقتراح مواقع نقاط وصول إضافية.",
     issuedById: "u1", departmentId: "d1", deptHeadId: "u4",
     participantIds: [],
-    issuedAt: daysFromNow(-1, 9), dueAt: daysFromNow(10, 15),
+    issuedAt: daysFromNow(-1, 9),
     priority: "normal", status: "new", progress: 0,
     tags: ["دراسات", "شبكات"],
     attachments: [], subtasks: [],
@@ -138,7 +142,7 @@ export const tasks: Task[] = [
     description: "تحديد نقطة الانقطاع وإصلاحها وإعادة الخدمة في المحور الشمالي.",
     issuedById: "u3", departmentId: "d3", deptHeadId: "u6", assigneeId: "u10",
     participantIds: [],
-    issuedAt: daysFromNow(-4, 10), dueAt: daysFromNow(-2, 15),
+    issuedAt: daysFromNow(-4, 10),
     priority: "urgent", status: "blocked", progress: 30,
     tags: ["كابلات", "صيانة"],
     attachments: [], subtasks: [],
@@ -150,7 +154,7 @@ export const tasks: Task[] = [
     description: "جرد شامل للتجهيزات والأدوات في المستودع الفرعي وإعداد تقرير مفصل.",
     issuedById: "u2", departmentId: "d4", deptHeadId: "u7", assigneeId: "u11",
     participantIds: [],
-    issuedAt: daysFromNow(-20, 10), dueAt: daysFromNow(-8, 15),
+    issuedAt: daysFromNow(-20, 10),
     priority: "important", status: "approved", progress: 100,
     tags: ["تقارير", "تجهيزات"],
     attachments: [{ id: "a3", name: "تقرير_الجرد_النهائي.pdf", kind: "pdf", size: "820KB" }],
@@ -163,11 +167,11 @@ export const tasks: Task[] = [
     description: "إعداد دراسة فنية لربط الفروع الخارجية بالمقر الرئيسي عبر شبكة VPN مؤمنة.",
     issuedById: "u1", departmentId: "d1", deptHeadId: "u4", assigneeId: "u8",
     participantIds: [],
-    issuedAt: daysFromNow(-8, 9), dueAt: daysFromNow(6, 15),
+    issuedAt: daysFromNow(-8, 9),
     priority: "important", status: "waiting_info", progress: 45,
     tags: ["دراسات", "شبكات", "أمن"],
     attachments: [], subtasks: [],
-    confidential: true,
+    
   },
   {
     id: "t11", number: "TK-2026-0011",
@@ -175,7 +179,7 @@ export const tasks: Task[] = [
     description: "استبدال بطاريات UPS الرئيسي وإجراء اختبارات التحميل.",
     issuedById: "u3", departmentId: "d3", deptHeadId: "u6", assigneeId: "u10",
     participantIds: [],
-    issuedAt: daysFromNow(-6, 10), dueAt: daysFromNow(2, 15),
+    issuedAt: daysFromNow(-6, 10),
     priority: "important", status: "in_progress", progress: 60,
     tags: ["صيانة", "طاقة"],
     attachments: [], subtasks: [],
@@ -186,7 +190,7 @@ export const tasks: Task[] = [
     description: "تركيب 4 كاميرات مع تسجيل داخلي وربط بغرفة العمليات.",
     issuedById: "u1", departmentId: "d4", deptHeadId: "u7",
     participantIds: [],
-    issuedAt: daysFromNow(-1, 10), dueAt: daysFromNow(9, 15),
+    issuedAt: daysFromNow(-1, 10),
     priority: "normal", status: "received", progress: 5,
     tags: ["كاميرات"],
     attachments: [], subtasks: [],
@@ -197,7 +201,7 @@ export const tasks: Task[] = [
     description: "مراجعة قواعد الجدار الناري وتحديثها حسب سياسة الأمن المعتمدة.",
     issuedById: "u2", departmentId: "d2", deptHeadId: "u5", assigneeId: "u9",
     participantIds: [],
-    issuedAt: daysFromNow(-9, 10), dueAt: daysFromNow(-1, 15),
+    issuedAt: daysFromNow(-9, 10),
     priority: "urgent", status: "returned", progress: 75,
     tags: ["شبكات", "أمن"],
     attachments: [], subtasks: [],
@@ -209,7 +213,7 @@ export const tasks: Task[] = [
     description: "تحديث خطة الاستجابة للطوارئ وتوزيع نسخ محدثة على الأقسام.",
     issuedById: "u1", departmentId: "d1", deptHeadId: "u4",
     participantIds: ["u2", "u3"],
-    issuedAt: daysFromNow(-12, 9), dueAt: daysFromNow(-4, 15),
+    issuedAt: daysFromNow(-12, 9),
     priority: "important", status: "submitted", progress: 100,
     tags: ["خطط", "طوارئ"],
     attachments: [{ id: "a4", name: "الخطة_المحدثة.docx", kind: "word", size: "340KB" }],
@@ -221,7 +225,7 @@ export const tasks: Task[] = [
     description: "توريد 6 سويتشات جيجابت وتركيبها في الطوابق الثلاثة.",
     issuedById: "u1", departmentId: "d2", deptHeadId: "u5", assigneeId: "u9",
     participantIds: [],
-    issuedAt: daysFromNow(-15, 10), dueAt: daysFromNow(3, 15),
+    issuedAt: daysFromNow(-15, 10),
     priority: "important", status: "in_progress", progress: 65,
     tags: ["شبكات", "تجهيزات"],
     attachments: [], subtasks: [],
@@ -232,7 +236,7 @@ export const tasks: Task[] = [
     description: "تجميع بيانات الأداء الشهرية وإعداد تقرير موجز للإدارة.",
     issuedById: "u2", departmentId: "d2", deptHeadId: "u5",
     participantIds: [],
-    issuedAt: daysFromNow(-2, 11), dueAt: daysFromNow(4, 15),
+    issuedAt: daysFromNow(-2, 11),
     priority: "normal", status: "draft", progress: 0,
     tags: ["تقارير"],
     attachments: [], subtasks: [],
@@ -243,7 +247,7 @@ export const tasks: Task[] = [
     description: "جولة صيانة دورية لأجهزة اتصال الدوريات وتحديث البرمجيات الثابتة.",
     issuedById: "u3", departmentId: "d3", deptHeadId: "u6", assigneeId: "u10",
     participantIds: [],
-    issuedAt: daysFromNow(-1, 10), dueAt: daysFromNow(2, 15),
+    issuedAt: daysFromNow(-1, 10),
     priority: "important", status: "new", progress: 0,
     tags: ["صيانة", "اتصالات"],
     attachments: [], subtasks: [],
@@ -254,7 +258,7 @@ export const tasks: Task[] = [
     description: "أرشفة إلكترونية لمستندات المشاريع المنتهية خلال العام السابق.",
     issuedById: "u2", departmentId: "d1", deptHeadId: "u4", assigneeId: "u8",
     participantIds: [],
-    issuedAt: daysFromNow(-40, 9), dueAt: daysFromNow(-20, 15),
+    issuedAt: daysFromNow(-40, 9),
     priority: "normal", status: "archived", progress: 100,
     tags: ["أرشفة"],
     attachments: [], subtasks: [],
@@ -311,12 +315,12 @@ export const activity: ActivityEvent[] = [
 export const notifications: AppNotification[] = [
   { id: "n1", userId: "u1", type: "submitted", title: "تكليف بانتظار الاعتماد", body: "قسم الشبكات قدم التكليف TK-2026-0005 للمراجعة.", taskId: "t5", createdAt: daysFromNow(-3, 15), read: false },
   { id: "n2", userId: "u1", type: "submitted", title: "تكليف بانتظار الاعتماد", body: "قسم الدراسات قدم التكليف TK-2026-0014.", taskId: "t14", createdAt: daysFromNow(-4, 14), read: false },
-  { id: "n3", userId: "u1", type: "overdue", title: "تكليف متأخر", body: "التكليف TK-2026-0002 تجاوز موعد التسليم.", taskId: "t2", createdAt: daysFromNow(0, 8), read: false },
+  { id: "n3", userId: "u1", type: "submitted", title: "تكليف متأخر", body: "التكليف TK-2026-0002 تجاوز موعد التسليم.", taskId: "t2", createdAt: daysFromNow(0, 8), read: false },
   { id: "n4", userId: "u4", type: "formal_instruction", title: "توجيه رسمي جديد", body: "توجيه بخصوص التكليف TK-2026-0010 يتطلب استلامكم.", taskId: "t10", createdAt: daysFromNow(-8, 9), read: false },
   { id: "n5", userId: "u4", type: "reply", title: "رد جديد على تعليقكم", body: "المدير رد على تعليقكم في التكليف TK-2026-0001.", taskId: "t1", createdAt: daysFromNow(-3, 15), read: true },
   { id: "n6", userId: "u5", type: "assignment", title: "تكليف جديد", body: "تم إسناد التكليف TK-2026-0006 لقسمكم.", taskId: "t6", createdAt: daysFromNow(-3, 11), read: false },
   { id: "n7", userId: "u5", type: "returned", title: "تكليف معاد للتعديل", body: "التكليف TK-2026-0013 أعيد بحاجة لمزيد من التوثيق.", taskId: "t13", createdAt: daysFromNow(-1, 12), read: false },
-  { id: "n8", userId: "u2", type: "deadline", title: "اقتراب موعد تسليم", body: "التكليف TK-2026-0011 يستحق خلال يومين.", taskId: "t11", createdAt: daysFromNow(0, 9), read: false },
+  { id: "n8", userId: "u2", type: "assignment", title: "اقتراب موعد تسليم", body: "التكليف TK-2026-0011 يستحق خلال يومين.", taskId: "t11", createdAt: daysFromNow(0, 9), read: false },
 ];
 
 // ---------- Audit ----------

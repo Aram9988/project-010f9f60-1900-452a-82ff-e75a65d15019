@@ -1,6 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -10,22 +9,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { TaskTable } from "@/components/task/TaskTable";
 import { TaskCard } from "@/components/task/TaskCard";
-import { taskService } from "@/services/taskService";
-import { departmentService } from "@/services/departmentService";
-import { STATUS_LABELS, PRIORITY_LABELS, type TaskStatus, type TaskPriority } from "@/lib/types";
-import { Link } from "@tanstack/react-router";
-import { Plus, Search, Filter } from "lucide-react";
-import { isOverdue, fmtDate } from "@/lib/format";
-
-const SAVED = [
-  { id: "all", label: "الكل" },
-  { id: "mine-today", label: "تكليفات اليوم" },
-  { id: "overdue", label: "المتأخرة" },
-  { id: "critical", label: "العاجلة جداً" },
-  { id: "await-ack", label: "بانتظار الاستلام" },
-  { id: "await-approval", label: "بانتظار اعتماد المدير" },
-  { id: "returned", label: "المعادة للتعديل" },
-];
+import { useAppStore, useSession } from "@/lib/store";
+import { STATUS_LABELS, PRIORITY_LABELS, type TaskStatus } from "@/lib/types";
+import { Plus, Search } from "lucide-react";
+import { getUser } from "@/services/userService";
+import { scopeTasks, scopedDepartments, hasPermission } from "@/lib/authz";
+import { AccessDenied } from "@/components/access-denied";
 
 export const Route = createFileRoute("/tasks/")({
   head: () => ({ meta: [{ title: "جميع التكليفات — منظومة التكليفات" }] }),
@@ -33,21 +22,29 @@ export const Route = createFileRoute("/tasks/")({
 });
 
 function TasksPage() {
-  const { data: tasks = [] } = useQuery({ queryKey: ["tasks"], queryFn: () => taskService.list() });
-  const { data: depts = [] } = useQuery({ queryKey: ["depts"], queryFn: () => departmentService.list() });
+  const uid = useSession((s) => s.currentUserId);
+  const user = getUser(uid);
+  const allTasks = useAppStore((s) => s.tasks);
+  const allDepts = useAppStore((s) => s.departments);
   const [q, setQ] = useState("");
   const [saved, setSaved] = useState("all");
   const [status, setStatus] = useState<string>("");
   const [priority, setPriority] = useState<string>("");
   const [deptId, setDeptId] = useState<string>("");
 
+  if (!user || (!hasPermission(user,"view_all_tasks") && !hasPermission(user,"view_department_tasks"))) return <AccessDenied />;
+
+  const scopedDeptIds = scopedDepartments(user);
+  const depts = scopedDeptIds ? allDepts.filter((d) => scopedDeptIds.includes(d.id)) : allDepts;
+  const canCreate = hasPermission(user, "create_task");
+
   const filtered = useMemo(() => {
-    let list = tasks;
-    if (saved === "overdue") list = list.filter((t) => isOverdue(t.dueAt, t.status));
+    let list = scopeTasks(user, allTasks.filter((t) => !t.archived));
     if (saved === "critical") list = list.filter((t) => t.priority === "critical");
     if (saved === "await-ack") list = list.filter((t) => t.status === "new");
     if (saved === "await-approval") list = list.filter((t) => t.status === "submitted");
     if (saved === "returned") list = list.filter((t) => t.status === "returned");
+    if (saved === "needs-attention") list = list.filter((t) => ["waiting_info","blocked","returned"].includes(t.status));
     if (status) list = list.filter((t) => t.status === status);
     if (priority) list = list.filter((t) => t.priority === priority);
     if (deptId) list = list.filter((t) => t.departmentId === deptId);
@@ -55,16 +52,25 @@ function TasksPage() {
       const s = q.trim();
       list = list.filter((t) => t.title.includes(s) || t.number.includes(s) || t.description.includes(s));
     }
-    return list.sort((a, b) => (a.priority === "critical" ? -1 : 0) - (b.priority === "critical" ? -1 : 0));
-  }, [tasks, saved, status, priority, deptId, q]);
+    return list;
+  }, [user, allTasks, saved, status, priority, deptId, q]);
+
+  const SAVED = [
+    { id: "all", label: "الكل" },
+    { id: "critical", label: "العاجلة جداً" },
+    { id: "await-ack", label: "بانتظار الاستلام" },
+    { id: "await-approval", label: "بانتظار الاعتماد" },
+    { id: "returned", label: "المعادة للتعديل" },
+    { id: "needs-attention", label: "تحتاج متابعة" },
+  ];
 
   return (
     <AppShell>
       <PageHeader
         title="جميع التكليفات"
-        subtitle="جميع التكليفات النشطة والمؤرشفة"
+        subtitle="التكليفات النشطة المصرح لك بعرضها"
         breadcrumbs={[{ to: "/dashboard", label: "الرئيسية" }, { label: "التكليفات" }]}
-        actions={<Button asChild><Link to="/tasks/new"><Plus className="h-4 w-4 me-1" /> تكليف جديد</Link></Button>}
+        actions={canCreate ? <Button asChild><Link to="/tasks/new"><Plus className="h-4 w-4 me-1" /> تكليف جديد</Link></Button> : undefined}
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -108,7 +114,6 @@ function TasksPage() {
         <TabsList>
           <TabsTrigger value="list">قائمة</TabsTrigger>
           <TabsTrigger value="board">لوحة</TabsTrigger>
-          <TabsTrigger value="calendar">تقويم</TabsTrigger>
         </TabsList>
         <TabsContent value="list" className="mt-4">
           <TaskTable tasks={filtered} />
@@ -126,25 +131,6 @@ function TasksPage() {
                 </div>
               </div>
             ))}
-          </div>
-        </TabsContent>
-        <TabsContent value="calendar" className="mt-4">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="space-y-2">
-              {filtered.map((t) => (
-                <Link key={t.id} to="/tasks/$taskId" params={{taskId: t.id}} className="flex items-center justify-between rounded-lg border p-2 hover:bg-muted/50">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="grid h-10 w-14 place-items-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
-                      {fmtDate(t.dueAt)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs text-muted-foreground font-mono">{t.number}</div>
-                      <div className="font-medium line-clamp-1">{t.title}</div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
           </div>
         </TabsContent>
       </Tabs>
