@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
-import { auditService } from "@/services/auditService";
+import { useAppStore, useSession } from "@/lib/store";
 import { getUser } from "@/services/userService";
 import { ACTIVITY_LABELS } from "@/lib/types";
 import { fmtDateTime } from "@/lib/format";
+import { hasPermission } from "@/lib/authz";
+import { AccessDenied } from "@/components/access-denied";
 
 export const Route = createFileRoute("/audit")({
   head: () => ({ meta: [{ title: "سجل التدقيق — منظومة التكليفات" }] }),
@@ -14,11 +15,13 @@ export const Route = createFileRoute("/audit")({
 });
 
 function AuditPage() {
-  const { data: entries = [] } = useQuery({ queryKey: ["audit"], queryFn: () => auditService.list() });
+  const user = getUser(useSession((s) => s.currentUserId));
+  const entries = useAppStore((s) => [...s.audit].sort((a,b) => b.createdAt.localeCompare(a.createdAt)));
+  if (!user || !hasPermission(user, "view_audit")) return <AccessDenied />;
   return (
     <AppShell>
       <PageHeader title="سجل التدقيق" subtitle="سجل غير قابل للتعديل لكافة الإجراءات داخل النظام" />
-      <Card><CardContent className="p-0">
+      <Card><CardContent className="p-0 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-right text-xs text-muted-foreground">
             <tr><th className="p-3">الوقت</th><th className="p-3">المستخدم</th><th className="p-3">الإجراء</th><th className="p-3">التكليف</th><th className="p-3">التفاصيل</th></tr>
