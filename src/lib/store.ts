@@ -102,6 +102,8 @@ type Store = UISession & AppData & {
   }) => Comment;
   acknowledgeInstruction: (commentId: string, userId: string) => void;
   hideComment: (commentId: string, actorId: string) => void;
+  editComment: (commentId: string, actorId: string, newBody: string) => void;
+  markQuestionAnswered: (commentId: string, actorId: string) => void;
   // attachments
   addAttachment: (taskId: string, actorId: string, att: Attachment) => void;
   removeAttachment: (taskId: string, actorId: string, attId: string) => void;
@@ -149,10 +151,12 @@ function logActivity(state: Store, taskId: string, type: ActivityType, actorId: 
 
 function notify(state: Store, userId: string, n: Omit<AppNotification, "id" | "userId" | "createdAt" | "read">) {
   if (!userId) return;
-  // dedup near-duplicates in same second
-  const exists = state.notifications.find(
-    (x) => x.userId === userId && x.type === n.type && x.taskId === n.taskId && x.body === n.body,
-  );
+  // Dedupe by (userId + eventId) primarily, or by content fingerprint fallback.
+  const key = n.eventId ? `${userId}:${n.eventId}` : `${userId}:${n.type}:${n.taskId ?? ""}:${n.commentId ?? ""}:${n.body}`;
+  const exists = state.notifications.some((x) => {
+    const xk = x.eventId ? `${x.userId}:${x.eventId}` : `${x.userId}:${x.type}:${x.taskId ?? ""}:${x.commentId ?? ""}:${x.body}`;
+    return xk === key;
+  });
   if (exists) return;
   state.notifications.unshift({
     id: nid("n"), userId, createdAt: nowIso(), read: false, ...n,
@@ -164,17 +168,27 @@ function notifyMany(state: Store, userIds: (string | undefined)[], actorId: stri
   set.forEach((u) => notify(state, u, n));
 }
 
+/**
+ * Authorized audience for a task — only users who CAN access the task get
+ * notified. Central authorization is mirrored here to avoid a circular
+ * import with authz.ts (which reads the store).
+ */
 function taskAudience(task: Task, state: AppData): string[] {
-  const ids = new Set<string>();
-  ids.add(task.issuedById);
-  if (task.deptHeadId) ids.add(task.deptHeadId);
-  if (task.assigneeId) ids.add(task.assigneeId);
-  task.participantIds.forEach((p) => ids.add(p));
-  // boss/associate always
-  state.users.forEach((u) => { if (u.role === "boss" || u.role === "associate") ids.add(u.id); });
-  // office user tied to this department
+  const perms = state.rolePermissions;
   const dept = state.departments.find((d) => d.id === task.departmentId);
-  if (dept?.officeResponsibleId) ids.add(dept.officeResponsibleId);
+  const ids = new Set<string>();
+  for (const u of state.users) {
+    if (u.active === false || u.archived) continue;
+    if (u.role === "diwan") continue; // Diwan never receives operational notifications
+    const p = perms[u.role] ?? [];
+    if (p.includes("view_all_tasks")) { ids.add(u.id); continue; }
+    if (u.departmentId === task.departmentId && p.includes("view_department_tasks")) { ids.add(u.id); continue; }
+    if (task.issuedById === u.id) { ids.add(u.id); continue; }
+    if (task.deptHeadId === u.id) { ids.add(u.id); continue; }
+    if (task.assigneeId === u.id) { ids.add(u.id); continue; }
+    if (task.participantIds.includes(u.id)) { ids.add(u.id); continue; }
+    if (dept?.officeResponsibleId === u.id) { ids.add(u.id); continue; }
+  }
   return Array.from(ids);
 }
 
@@ -205,9 +219,20 @@ export const useAppStore = create<Store>()(
         set((s) => ({ departments: [...s.departments, d] }));
         return d;
       },
-      updateDepartment: (id, patch) => set((s) => ({
-        departments: s.departments.map((d) => (d.id === id ? { ...d, ...patch } : d)),
-      })),
+      updateDepartment: (id, patch) => set((s) => {
+        const departments = s.departments.map((d) => (d.id === id ? { ...d, ...patch } : d));
+        // Sync assigned head/office → departmentId & role
+        let users = s.users;
+        if (patch.headId) {
+          users = users.map((u) => u.id === patch.headId
+            ? { ...u, departmentId: id, role: u.role === "boss" || u.role === "associate" || u.role === "admin" ? u.role : "dept_head" }
+            : u);
+        }
+        if (patch.officeResponsibleId) {
+          users = users.map((u) => u.id === patch.officeResponsibleId ? { ...u, departmentId: id, role: "office" } : u);
+        }
+        return { departments, users };
+      }),
       archiveDepartment: (id) => set((s) => ({
         departments: s.departments.map((d) => (d.id === id ? { ...d, archived: true } : d)),
       })),
@@ -219,7 +244,7 @@ export const useAppStore = create<Store>()(
         const hasUsers = s.users.some((u) => u.departmentId === id && u.active !== false && !u.archived);
         const hasTasks = s.tasks.some((t) => t.departmentId === id && !t.archived && !t.deletedAt && !["approved","archived","cancelled"].includes(t.status));
         if (hasUsers || hasTasks) {
-          return { ok: false, reason: "لا يمكن حذف قسم يحتوي على مستخدمين نشطين أو تكليفات مفتوحة. أعد تعيينهم أولاً." };
+          return { ok: false, reason: "لا يمكن حذف قسم يحتوي على مستخدمين نشطين أو تكليفات مفتوحة. أعد تعيينهم لقسم آخر أولاً أو استخدم الأرشفة." };
         }
         set({ departments: s.departments.filter((d) => d.id !== id) });
         return { ok: true };
@@ -479,6 +504,21 @@ export const useAppStore = create<Store>()(
         return {};
       }),
 
+      editComment: (commentId, actorId, newBody) => set((st) => {
+        const c = st.comments.find((x) => x.id === commentId); if (!c) return {};
+        if (!c.edited) c.originalBody = c.body;
+        c.body = newBody; c.edited = true; c.editedAt = nowIso();
+        logActivity(st as Store, c.taskId, "comment_edited", actorId, newBody.slice(0, 120));
+        return {};
+      }),
+
+      markQuestionAnswered: (commentId, actorId) => set((st) => {
+        const c = st.comments.find((x) => x.id === commentId); if (!c || c.type !== "question") return {};
+        c.questionStatus = "answered";
+        logActivity(st as Store, c.taskId, "comment_added", actorId, "تم اعتبار السؤال مُجاباً");
+        return {};
+      }),
+
       // ------ Attachments (metadata in store; data URL kept inline; large blobs -> future IndexedDB) ------
       addAttachment: (taskId, actorId, att) => set((st) => {
         const t = st.tasks.find((x) => x.id === taskId); if (!t) return {};
@@ -494,7 +534,13 @@ export const useAppStore = create<Store>()(
         const t = st.tasks.find((x) => x.id === taskId); if (!t) return {};
         const removed = t.attachments.find((a) => a.id === attId);
         t.attachments = t.attachments.filter((a) => a.id !== attId);
-        if (removed) logActivity(st as Store, taskId, "file_removed", actorId, removed.name);
+        if (removed) {
+          logActivity(st as Store, taskId, "file_removed", actorId, removed.name);
+          notifyMany(st as Store, taskAudience(t, st), actorId, {
+            type: "attachment", title: "تم حذف مرفق",
+            body: `${t.number}: ${removed.name}`, taskId,
+          });
+        }
         return {};
       }),
 
@@ -507,8 +553,22 @@ export const useAppStore = create<Store>()(
       })),
     }),
     {
-      name: "tk-app-v3",
-      version: 3,
+      name: "tk-app-v4",
+      version: 4,
+      migrate: (persisted: any, from) => {
+        // Any state persisted before v4 lacks Diwan/permission fixes and
+        // may contain deadline artefacts — reseed cleanly.
+        if (!persisted || from < 4) {
+          return {
+            currentUserId: "u1",
+            theme: persisted?.theme ?? "light",
+            sidebarCollapsed: persisted?.sidebarCollapsed ?? false,
+            recentDepartments: [],
+            ...initialData(),
+          } as any;
+        }
+        return persisted;
+      },
       partialize: (s) => ({
         currentUserId: s.currentUserId,
         theme: s.theme,

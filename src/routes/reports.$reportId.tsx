@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { reportService, periodRange, REPORTS, type ReportPeriod } from "@/services/reportService";
+import * as XLSX from "xlsx";
 import { useAppStore, useSession } from "@/lib/store";
 import { getDepartment } from "@/services/departmentService";
 import { getUser } from "@/services/userService";
@@ -30,44 +31,71 @@ function ReportPreview() {
   const _touch = useAppStore((s) => s.activity.length); // recompute on store change
   void _touch;
 
-  const [from, setFrom] = useState<string>("");
-  const [to, setTo] = useState<string>("");
+  const today = new Date().toISOString().slice(0, 10);
+  const [anchor, setAnchor] = useState<string>(today);
+  const [from, setFrom] = useState<string>(today);
+  const [to, setTo] = useState<string>(today);
   const [deptFilter, setDeptFilter] = useState<string>("");
   const [eventFilter, setEventFilter] = useState<string>("");
 
   const period: ReportPeriod = (report?.id as ReportPeriod) ?? "custom";
-  const range = periodRange(period, from, to);
+  const range = period === "custom" || period === "completed" || period === "in_progress"
+    ? periodRange(period, from, to)
+    : periodRange(period, undefined, undefined, anchor);
 
   if (!user || !hasPermission(user, "view_reports")) return <AccessDenied />;
   const canExport = hasPermission(user, "export_reports");
   const scopeIds = scopedDepartments(user);
   const depts = scopeIds ? allDepts.filter((d) => scopeIds.includes(d.id)) : allDepts;
 
+  const mode = period === "completed" ? "completed" : period === "in_progress" ? "in_progress" : "activity";
   const rowsPromise = useMemo(() => reportService.build(user, {
     from: range.from, to: range.to,
     departmentId: deptFilter || undefined,
     eventType: (eventFilter as ActivityType) || undefined,
-  }), [user, range.from, range.to, deptFilter, eventFilter]);
+    mode: mode as any,
+  }), [user, range.from, range.to, deptFilter, eventFilter, mode]);
 
   const [rows, setRows] = useState<Awaited<typeof rowsPromise>>([]);
   useMemo(() => { rowsPromise.then(setRows); }, [rowsPromise]);
 
   function print() { window.print(); }
-  function exportCsv() {
-    if (!canExport) return toast.error("لا تملك صلاحية التصدير");
-    const header = ["الرقم","التكليف","القسم","المسؤول","الحدث","بواسطة","الوقت","الحالة النهائية"];
-    const lines = [header.join(",")];
+  function buildRows() {
+    const header = ["الرقم","التكليف","القسم","المسؤول","الحدث","التفاصيل","بواسطة","الوقت","الحالة"];
+    const data: (string | number)[][] = [header];
     for (const r of rows) {
       for (const e of r.events) {
-        lines.push([r.number, `"${r.title.replace(/"/g,'""')}"`, getDepartment(r.departmentId)?.short ?? "",
-          r.responsibleId ? (getUser(r.responsibleId)?.name ?? "") : "", ACTIVITY_LABELS[e.type],
-          getUser(e.actorId)?.name ?? "", fmtDateTime(e.createdAt), STATUS_LABELS[r.latestStatus as keyof typeof STATUS_LABELS]].join(","));
+        data.push([
+          r.number, r.title, getDepartment(r.departmentId)?.name ?? "",
+          r.responsibleId ? (getUser(r.responsibleId)?.name ?? "") : "",
+          ACTIVITY_LABELS[e.type], e.detail ?? "",
+          getUser(e.actorId)?.name ?? "", fmtDateTime(e.createdAt),
+          STATUS_LABELS[r.latestStatus as keyof typeof STATUS_LABELS] ?? r.latestStatus,
+        ]);
       }
     }
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    return data;
+  }
+  function exportCsv() {
+    if (!canExport) return toast.error("لا تملك صلاحية التصدير");
+    const data = buildRows();
+    const csv = data.map((r) => r.map((c) => {
+      const s = String(c ?? "");
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `${report?.id}-${new Date().toISOString().slice(0,10)}.csv`; a.click();
     URL.revokeObjectURL(url);
+  }
+  function exportXlsx() {
+    if (!canExport) return toast.error("لا تملك صلاحية التصدير");
+    const data = buildRows();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    (ws as any)["!cols"] = [{ wch: 14 }, { wch: 40 }, { wch: 26 }, { wch: 22 }, { wch: 22 }, { wch: 30 }, { wch: 22 }, { wch: 18 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "التقرير");
+    XLSX.writeFile(wb, `${report?.id}-${new Date().toISOString().slice(0,10)}.xlsx`);
   }
 
   return (
@@ -79,7 +107,8 @@ function ReportPreview() {
         actions={
           <>
             <Button variant="outline" onClick={print}><Printer className="h-4 w-4 me-1" /> طباعة</Button>
-            <Button variant="outline" onClick={exportCsv} disabled={!canExport}><Sheet className="h-4 w-4 me-1" /> تصدير CSV</Button>
+            <Button variant="outline" onClick={exportXlsx} disabled={!canExport}><Sheet className="h-4 w-4 me-1" /> تصدير Excel</Button>
+            <Button variant="outline" onClick={exportCsv} disabled={!canExport}>CSV</Button>
             <Button variant="outline" onClick={print} disabled={!canExport}><FileDown className="h-4 w-4 me-1" /> حفظ PDF (طباعة)</Button>
           </>
         }
@@ -87,11 +116,20 @@ function ReportPreview() {
 
       <Card className="mb-4 no-print">
         <CardContent className="grid gap-3 md:grid-cols-4 pt-4">
-          {period === "custom" && (
+          {(period === "custom" || period === "completed" || period === "in_progress") && (
             <>
               <div><label className="text-xs">من</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
               <div><label className="text-xs">إلى</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
             </>
+          )}
+          {period === "daily" && (
+            <div><label className="text-xs">اليوم</label><Input type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)} /></div>
+          )}
+          {period === "weekly" && (
+            <div><label className="text-xs">أي يوم في الأسبوع</label><Input type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)} /></div>
+          )}
+          {period === "monthly" && (
+            <div><label className="text-xs">الشهر</label><Input type="month" value={anchor.slice(0,7)} onChange={(e) => setAnchor(e.target.value + "-01")} /></div>
           )}
           <div><label className="text-xs">القسم</label>
             <Select value={deptFilter || "__all"} onValueChange={(v) => setDeptFilter(v === "__all" ? "" : v)}>

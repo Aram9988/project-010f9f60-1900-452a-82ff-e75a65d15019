@@ -115,6 +115,8 @@ export interface Comment {
   body: string;
   createdAt: string;
   edited?: boolean;
+  originalBody?: string;
+  editedAt?: string;
   hidden?: boolean;
   pinned?: boolean;
   isFormalInstruction?: boolean;
@@ -138,6 +140,7 @@ export type ActivityType =
   | "task_acknowledged"
   | "comment_added"
   | "reply_added"
+  | "comment_edited"
   | "formal_instruction_issued"
   | "instruction_acknowledged"
   | "file_uploaded"
@@ -159,6 +162,7 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   task_acknowledged: "تأكيد الاستلام",
   comment_added: "إضافة تعليق",
   reply_added: "إضافة رد",
+  comment_edited: "تعديل تعليق",
   formal_instruction_issued: "إصدار توجيه رسمي",
   instruction_acknowledged: "تأكيد استلام توجيه",
   file_uploaded: "رفع مرفق",
@@ -238,6 +242,7 @@ export interface AppNotification {
   body: string;
   taskId?: string;
   commentId?: string;
+  eventId?: string;
   createdAt: string;
   read: boolean;
 }
@@ -263,6 +268,7 @@ export type Permission =
   | "issue_formal_instruction"
   | "acknowledge_instruction"
   | "upload_attachment"
+  | "remove_attachment"
   | "submit_task"
   | "return_task"
   | "approve_task"
@@ -288,6 +294,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   issue_formal_instruction: "إصدار توجيه رسمي",
   acknowledge_instruction: "تأكيد استلام توجيه",
   upload_attachment: "رفع المرفقات",
+  remove_attachment: "حذف المرفقات",
   submit_task: "تقديم التكليف للاعتماد",
   return_task: "إعادة التكليف للتعديل",
   approve_task: "اعتماد التكليف",
@@ -308,13 +315,13 @@ export const ALL_PERMISSIONS: Permission[] = Object.keys(PERMISSION_LABELS) as P
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   boss: [
     "view_all_tasks","create_task","assign_task","comment","issue_formal_instruction",
-    "upload_attachment","submit_task","return_task","approve_task","delete_task",
-    "restore_task","view_archived_tasks","view_reports","export_reports","view_audit",
+    "upload_attachment","remove_attachment","submit_task","return_task","approve_task",
+    "delete_task","restore_task","view_archived_tasks","view_reports","export_reports","view_audit",
   ],
   associate: [
     "view_all_tasks","create_task","assign_task","comment","issue_formal_instruction",
-    "upload_attachment","submit_task","return_task","approve_task","delete_task",
-    "restore_task","view_archived_tasks","view_reports","export_reports","view_audit",
+    "upload_attachment","remove_attachment","submit_task","return_task","approve_task",
+    "delete_task","restore_task","view_archived_tasks","view_reports","export_reports","view_audit",
   ],
   office: [
     "view_department_tasks","create_task","assign_task","comment","upload_attachment",
@@ -322,7 +329,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   dept_head: [
     "view_department_tasks","acknowledge_task","update_task","comment",
-    "acknowledge_instruction","upload_attachment","submit_task","view_reports",
+    "acknowledge_instruction","upload_attachment","remove_attachment","submit_task","view_reports",
   ],
   employee: [
     "view_department_tasks","acknowledge_task","update_task","comment",
@@ -333,7 +340,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   admin: [
     "manage_departments","manage_users","manage_permissions","view_audit",
-    "view_reports","export_reports",
+    "view_reports","export_reports","permanently_delete_task",
   ],
 };
 

@@ -291,7 +291,7 @@ export const comments: Comment[] = [
   { id: "c16", taskId: "t14", authorId: "u4", type: "update", body: "الخطة جاهزة للمراجعة. أرفقت النسخة النهائية.", createdAt: daysFromNow(-4, 14) },
   { id: "c17", taskId: "t14", authorId: "u2", parentId: "c16", type: "comment", body: "شكراً. سيتم رفعها للمدير للاعتماد.", createdAt: daysFromNow(-4, 15) },
 
-  { id: "c18", taskId: "t10", authorId: "u1", type: "instruction", body: "توجيه رسمي: تكليف سري — إحاطة يدوية فقط، لا يشارك خارج القسم.", createdAt: daysFromNow(-8, 9), isFormalInstruction: true, pinned: true },
+  { id: "c18", taskId: "t10", authorId: "u1", type: "instruction", body: "توجيه رسمي: تسريع إعداد الدراسة الفنية وإحاطة قسم الشبكات بالمخرجات.", createdAt: daysFromNow(-8, 9), isFormalInstruction: true, pinned: true },
   { id: "c19", taskId: "t10", authorId: "u4", type: "question", body: "هل يمكن الحصول على قائمة المواقع النهائية المطلوب ربطها؟", createdAt: daysFromNow(-6, 10), questionStatus: "waiting" },
 ];
 
