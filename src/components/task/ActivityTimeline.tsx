@@ -1,14 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
-import { taskService } from "@/services/taskService";
+import { useAppStore } from "@/lib/store";
 import { ACTIVITY_LABELS } from "@/lib/types";
 import { getUser } from "@/services/userService";
 import { fmtDateTime } from "@/lib/format";
 
 export function ActivityTimeline({ taskId }: { taskId: string }) {
-  const { data: events = [] } = useQuery({
-    queryKey: ["activity", taskId],
-    queryFn: () => taskService.activityFor(taskId),
-  });
+  const events = useAppStore((s) =>
+    s.activity.filter((a) => a.taskId === taskId).slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  );
   if (events.length === 0) {
     return <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">لا توجد أحداث بعد.</div>;
   }

@@ -1,9 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { NAV_ITEMS } from "@/lib/nav";
+import { navFor } from "@/lib/nav";
 import { useSession } from "@/lib/store";
 import { getUser } from "@/services/userService";
 import { cn } from "@/lib/utils";
 import { ChevronsLeftRight } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 export function Sidebar() {
   const collapsed = useSession((s) => s.sidebarCollapsed);
@@ -11,18 +12,21 @@ export function Sidebar() {
   const userId = useSession((s) => s.currentUserId);
   const user = getUser(userId);
   const path = useRouterState({ select: (r) => r.location.pathname });
-
-  const items = NAV_ITEMS.filter(
-    (i) => !i.roles || (user && i.roles.includes(user.role)),
-  );
+  const items = navFor(user);
 
   return (
     <aside
       className={cn(
-        "hidden md:flex sticky top-16 h-[calc(100vh-4rem)] shrink-0 flex-col border-l border-border bg-sidebar text-sidebar-foreground transition-[width]",
+        "hidden md:flex sticky top-16 h-[calc(100vh-4rem)] shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width]",
         collapsed ? "w-16" : "w-64",
       )}
     >
+      {!collapsed && (
+        <div className="p-4 border-b border-sidebar-border flex items-center gap-2">
+          <Logo size={28} />
+          <span className="text-xs font-semibold text-sidebar-foreground/80">اتصالات ريف دمشق</span>
+        </div>
+      )}
       <nav className="flex-1 overflow-y-auto p-3">
         <ul className="space-y-1">
           {items.map((it) => {
@@ -35,8 +39,8 @@ export function Sidebar() {
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                     active
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent",
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                   )}
                   title={it.label}
                 >

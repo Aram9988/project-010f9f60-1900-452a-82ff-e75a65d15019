@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Bell, Menu, Moon, Search, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,15 @@ import { useSession } from "@/lib/store";
 import { getUser, userService } from "@/services/userService";
 import { ROLE_LABELS } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { notificationService } from "@/services/notificationService";
 import { fmtRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { BrandBlock } from "@/components/logo";
 
 export function TopBar() {
+  const nav = useNavigate();
+  const qc = useQueryClient();
   const userId = useSession((s) => s.currentUserId);
   const setUser = useSession((s) => s.setCurrentUser);
   const theme = useSession((s) => s.theme);
@@ -25,8 +28,16 @@ export function TopBar() {
   const { data: notifs = [] } = useQuery({
     queryKey: ["notifs", userId],
     queryFn: () => notificationService.listForUser(userId),
+    refetchInterval: 3000,
   });
   const unread = notifs.filter((n) => !n.read).length;
+
+  async function openNotif(n: (typeof notifs)[number]) {
+    await notificationService.markRead(n.id);
+    qc.invalidateQueries({ queryKey: ["notifs", userId] });
+    if (n.taskId) nav({ to: "/tasks/$taskId", params: { taskId: n.taskId } });
+    else nav({ to: "/notifications" });
+  }
 
   return (
     <header className="sticky top-0 z-40 h-16 border-b border-border bg-card/95 backdrop-blur">
@@ -34,20 +45,13 @@ export function TopBar() {
         <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleSidebar}>
           <Menu className="h-5 w-5" />
         </Button>
-        <Link to="/dashboard" className="flex items-center gap-3 shrink-0">
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground font-black">
-            و.د
-          </div>
-          <div className="hidden md:flex flex-col leading-tight">
-            <span className="text-[11px] text-muted-foreground">وزارة الداخلية · قيادة الأمن الداخلي</span>
-            <span className="text-sm font-bold text-foreground">فرع اتصالات ريف دمشق</span>
-          </div>
-        </Link>
+        <Link to="/dashboard" className="shrink-0"><BrandBlock /></Link>
 
         <div className="flex-1 mx-2 max-w-xl hidden md:block">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="بحث في التكليفات، الأقسام، الأشخاص…" className="pr-9 bg-background" />
+            <Input placeholder="بحث في التكليفات…" className="pr-9 bg-background"
+              onKeyDown={(e) => { if (e.key === "Enter") nav({ to: "/tasks", search: { q: (e.currentTarget as HTMLInputElement).value } as any }); }} />
           </div>
         </div>
 
@@ -55,15 +59,15 @@ export function TopBar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
-                <span className="hidden sm:inline text-xs text-muted-foreground">تبديل الدور:</span>
+                <span className="hidden sm:inline text-xs text-muted-foreground">تجريبي · الدور:</span>
                 <span className="font-semibold">{user ? ROLE_LABELS[user.role] : "—"}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuContent align="end" className="w-64 max-h-96 overflow-y-auto">
               <DropdownMenuLabel>الدخول كمستخدم آخر (تجريبي)</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {allUsers.map((u) => (
-                <DropdownMenuItem key={u.id} onClick={() => setUser(u.id)} className="flex-col items-start gap-0">
+              {allUsers.filter((u) => u.active !== false).map((u) => (
+                <DropdownMenuItem key={u.id} onClick={() => { setUser(u.id); qc.invalidateQueries(); }} className="flex-col items-start gap-0">
                   <span className="font-medium">{u.name}</span>
                   <span className="text-xs text-muted-foreground">{ROLE_LABELS[u.role]}</span>
                 </DropdownMenuItem>
@@ -91,19 +95,18 @@ export function TopBar() {
                 {notifs.length === 0 && (
                   <div className="p-6 text-center text-sm text-muted-foreground">لا توجد إشعارات</div>
                 )}
-                {notifs.slice(0, 6).map((n) => (
-                  <Link
+                {notifs.slice(0, 8).map((n) => (
+                  <button
                     key={n.id}
-                    to={n.taskId ? "/tasks/$taskId" : "/notifications"}
-                    params={n.taskId ? { taskId: n.taskId } : undefined as any}
-                    className={cn("block border-b border-border/50 p-3 hover:bg-muted/50", !n.read && "bg-primary/5")}
+                    onClick={() => openNotif(n)}
+                    className={cn("block w-full text-right border-b border-border/50 p-3 hover:bg-muted/50", !n.read && "bg-primary/5")}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-sm font-medium">{n.title}</span>
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">{fmtRelative(n.createdAt)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
-                  </Link>
+                  </button>
                 ))}
               </div>
             </PopoverContent>
