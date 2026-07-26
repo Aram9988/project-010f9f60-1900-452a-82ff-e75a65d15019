@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { hasPermission, canAccessTask } from "@/lib/authz";
 import { AccessDenied } from "@/components/access-denied";
 import { AttachmentPicker } from "@/components/task/AttachmentPicker";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Attachment } from "@/lib/types";
 import { downloadAttachment, attachmentRepo } from "@/lib/attachment-repo";
 
@@ -43,7 +43,11 @@ function TaskDetail() {
   const task = useAppStore((s) => s.tasks.find((t) => t.id === taskId));
   const addAttachment = useAppStore((s) => s.addAttachment);
   const removeAttachment = useAppStore((s) => s.removeAttachment);
-  const comments = useAppStore((s) => s.comments.filter((c) => c.taskId === taskId));
+  const allComments = useAppStore((s) => s.comments);
+  const comments = useMemo(
+    () => (Array.isArray(allComments) ? allComments : []).filter((c) => c && c.taskId === taskId),
+    [allComments, taskId],
+  );
   const [pendingAtt, setPendingAtt] = useState<Attachment[]>([]);
 
   if (!task) return <AppShell><div className="p-6">تكليف غير موجود.</div></AppShell>;
@@ -104,7 +108,7 @@ function TaskDetail() {
             </CardContent>
           </Card>
 
-          <Tabs defaultValue="discussion">
+          <Tabs defaultValue={highlightCommentId ? "discussion" : "discussion"}>
             <TabsList className="w-full flex-wrap h-auto">
               <TabsTrigger value="discussion">المناقشات</TabsTrigger>
               <TabsTrigger value="instructions">التوجيهات الرسمية</TabsTrigger>
@@ -112,9 +116,10 @@ function TaskDetail() {
               <TabsTrigger value="attachments">المرفقات ({task.attachments.length})</TabsTrigger>
               <TabsTrigger value="subtasks">المهام الفرعية</TabsTrigger>
             </TabsList>
-            <TabsContent value="discussion" className="mt-4"><DiscussionThread taskId={task.id} /></TabsContent>
+            <TabsContent value="discussion" className="mt-4">
+              <DiscussionThread taskId={task.id} highlightCommentId={highlightCommentId} />
+            </TabsContent>
             <TabsContent value="instructions" className="mt-4"><DiscussionThread taskId={task.id} filter="instructions" /></TabsContent>
-            {highlightCommentId && <div className="hidden"><DiscussionThread taskId={task.id} highlightCommentId={highlightCommentId} /></div>}
             <TabsContent value="activity" className="mt-4"><ActivityTimeline taskId={task.id} /></TabsContent>
             <TabsContent value="attachments" className="mt-4">
               <Card>
