@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { hasPermission, canAccessTask } from "@/lib/authz";
 import { AccessDenied } from "@/components/access-denied";
 import { AttachmentPicker } from "@/components/task/AttachmentPicker";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Attachment } from "@/lib/types";
 import { downloadAttachment, attachmentRepo } from "@/lib/attachment-repo";
 
