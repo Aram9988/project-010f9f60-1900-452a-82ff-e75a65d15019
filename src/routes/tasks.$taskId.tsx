@@ -54,9 +54,10 @@ function TaskDetail() {
   const canAck = hasPermission(user, "acknowledge_task") && task.status === "new"
     && (task.deptHeadId === uid || task.assigneeId === uid || task.participantIds.includes(uid));
 
-  async function ack() { await taskService.acknowledge(task.id, uid); qc.invalidateQueries(); toast.success("تم تأكيد استلام التكليف"); }
+  const currentTask = task;
+  async function ack() { await taskService.acknowledge(currentTask.id, uid); qc.invalidateQueries(); toast.success("تم تأكيد استلام التكليف"); }
   async function uploadPending() {
-    for (const a of pendingAtt) addAttachment(task.id, uid, a);
+    for (const a of pendingAtt) addAttachment(currentTask.id, uid, a);
     setPendingAtt([]);
     toast.success("تم رفع المرفقات");
   }
