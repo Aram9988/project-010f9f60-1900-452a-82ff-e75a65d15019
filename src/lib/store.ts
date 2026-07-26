@@ -551,23 +551,32 @@ export const useAppStore = create<Store>()(
       markAllNotifsRead: (userId) => set((s) => ({
         notifications: s.notifications.map((n) => n.userId === userId ? { ...n, read: true } : n),
       })),
+      markNotifUnread: (id) => set((s) => ({
+        notifications: s.notifications.map((n) => n.id === id ? { ...n, read: false } : n),
+      })),
     }),
     {
-      name: "tk-app-v4",
-      version: 4,
+      name: "tk-app-v5",
+      version: 5,
       migrate: (persisted: any, from) => {
-        // Any state persisted before v4 lacks Diwan/permission fixes and
-        // may contain deadline artefacts — reseed cleanly.
-        if (!persisted || from < 4) {
-          return {
-            currentUserId: "u1",
+        // Any state persisted before v5 predates the stabilization pass —
+        // reseed the data slice cleanly while preserving UI prefs.
+        if (!persisted || from < 5) {
+          return normalizePersistedState({
+            currentUserId: persisted?.currentUserId ?? "u1",
             theme: persisted?.theme ?? "light",
             sidebarCollapsed: persisted?.sidebarCollapsed ?? false,
             recentDepartments: [],
             ...initialData(),
-          } as any;
+          }) as any;
         }
-        return persisted;
+        return normalizePersistedState(persisted);
+      },
+      merge: (persisted: any, current: any) => {
+        // Runs on every rehydrate — normalize whatever was on disk so a
+        // partial/malformed shape can never crash the UI.
+        const safe = normalizePersistedState(persisted ?? {});
+        return { ...current, ...safe };
       },
       partialize: (s) => ({
         currentUserId: s.currentUserId,
