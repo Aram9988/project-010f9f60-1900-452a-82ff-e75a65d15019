@@ -110,6 +110,7 @@ type Store = UISession & AppData & {
   // notifications
   markNotifRead: (id: string) => void;
   markAllNotifsRead: (userId: string) => void;
+  markNotifUnread: (id: string) => void;
 };
 
 function nid(prefix: string) { return prefix + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4); }
@@ -131,7 +132,7 @@ function initialData(): AppData {
     tasks: seedTasks.map((t) => ({ ...t, archived: t.status === "archived" })),
     comments: seedComments.map((c) => ({ ...c })),
     activity: seedActivity.map((a) => ({ ...a })),
-    notifications: [],
+    notifications: seedDemoNotifications(),
       audit: seedActivity.map((e) => ({
         id: "log_" + e.id, actorId: e.actorId, taskId: e.taskId,
         action: e.type, detail: e.detail, createdAt: e.createdAt,
@@ -141,6 +142,154 @@ function initialData(): AppData {
     taskCounter: seedTasks.length,
     seeded: true,
   };
+}
+
+function seedDemoNotifications(): AppNotification[] {
+  const t = (d: number) => new Date(Date.now() - d * 3_600_000).toISOString();
+  return [
+    { id: "seed_n1", userId: "u1", type: "submitted", title: "تكليف بانتظار الاعتماد", body: "TK-2026-0005 — تركيب خزانتين شبكيتين في مركز البيانات", taskId: "t5", createdAt: t(2), read: false },
+    { id: "seed_n2", userId: "u1", type: "update", title: "تحديث تنفيذي", body: "TK-2026-0003: تم تحديد سبب العطل: تلف بطاقة تغذية.", taskId: "t3", commentId: "c11", createdAt: t(5), read: false },
+    { id: "seed_n3", userId: "u1", type: "assignment", title: "تم استلام التكليف", body: "TK-2026-0001: تأكيد استلام التكليف", taskId: "t1", createdAt: t(24), read: true },
+    { id: "seed_n4", userId: "u2", type: "submitted", title: "تكليف بانتظار الاعتماد", body: "TK-2026-0014 — تحديث خطة الطوارئ لغرفة العمليات", taskId: "t14", createdAt: t(6), read: false },
+  ];
+}
+
+/**
+ * Normalize / repair whatever shape came from localStorage so a partial or
+ * stale persisted state can never crash the UI.
+ */
+function normalizePersistedState(s: any): any {
+  const out: any = { ...(s ?? {}) };
+  const arr = (v: any) => (Array.isArray(v) ? v : []);
+  out.users = arr(out.users);
+  out.departments = arr(out.departments);
+  out.tasks = arr(out.tasks);
+  out.comments = arr(out.comments);
+  out.activity = arr(out.activity);
+  out.notifications = arr(out.notifications);
+  out.audit = arr(out.audit);
+  out.passwordRequests = arr(out.passwordRequests);
+
+  // Users: ensure valid users list; if empty, reseed users/departments/tasks.
+  if (out.users.length === 0) {
+    const seeded = initialData();
+    out.users = seeded.users;
+    out.departments = seeded.departments;
+    if (out.tasks.length === 0) out.tasks = seeded.tasks;
+    if (out.comments.length === 0) out.comments = seeded.comments;
+    if (out.activity.length === 0) out.activity = seeded.activity;
+    if (out.audit.length === 0) out.audit = seeded.audit;
+    if (out.notifications.length === 0) out.notifications = seeded.notifications;
+  }
+
+  const validStatuses = new Set(["draft","new","received","in_progress","waiting_info","blocked","submitted","returned","approved","cancelled","archived"]);
+  const validPriorities = new Set(["normal","important","urgent","critical"]);
+  out.tasks = out.tasks.map((t: any) => ({
+    id: String(t?.id ?? nid("t")),
+    number: String(t?.number ?? ""),
+    title: String(t?.title ?? "بدون عنوان"),
+    description: String(t?.description ?? ""),
+    issuedById: String(t?.issuedById ?? ""),
+    departmentId: String(t?.departmentId ?? ""),
+    deptHeadId: t?.deptHeadId,
+    assigneeId: t?.assigneeId,
+    participantIds: Array.isArray(t?.participantIds) ? t.participantIds.filter(Boolean) : [],
+    issuedAt: typeof t?.issuedAt === "string" ? t.issuedAt : new Date().toISOString(),
+    priority: validPriorities.has(t?.priority) ? t.priority : "normal",
+    status: validStatuses.has(t?.status) ? t.status : "new",
+    progress: typeof t?.progress === "number" && isFinite(t.progress) ? Math.max(0, Math.min(100, t.progress)) : 0,
+    tags: Array.isArray(t?.tags) ? t.tags.filter((x: any) => typeof x === "string") : [],
+    attachments: Array.isArray(t?.attachments) ? t.attachments.filter(Boolean) : [],
+    subtasks: Array.isArray(t?.subtasks) ? t.subtasks.filter(Boolean) : [],
+    delayReason: t?.delayReason,
+    completionSummary: t?.completionSummary,
+    approvedById: t?.approvedById,
+    approvedAt: t?.approvedAt,
+    archived: typeof t?.archived === "boolean" ? t.archived : t?.status === "archived",
+    archivedById: t?.archivedById,
+    archivedAt: t?.archivedAt,
+    archiveReason: t?.archiveReason,
+    deletedById: t?.deletedById,
+    deletedAt: t?.deletedAt,
+  }));
+
+  out.comments = out.comments.map((c: any) => ({
+    id: String(c?.id ?? nid("c")),
+    taskId: String(c?.taskId ?? ""),
+    parentId: c?.parentId,
+    authorId: String(c?.authorId ?? ""),
+    type: c?.type ?? "comment",
+    body: String(c?.body ?? ""),
+    createdAt: typeof c?.createdAt === "string" ? c.createdAt : new Date().toISOString(),
+    edited: !!c?.edited,
+    originalBody: c?.originalBody,
+    editedAt: c?.editedAt,
+    hidden: !!c?.hidden,
+    pinned: !!c?.pinned,
+    isFormalInstruction: !!c?.isFormalInstruction,
+    acknowledgedByUserId: c?.acknowledgedByUserId,
+    acknowledgedAt: c?.acknowledgedAt,
+    questionStatus: c?.questionStatus,
+    attachments: Array.isArray(c?.attachments) ? c.attachments : [],
+    mentions: Array.isArray(c?.mentions) ? c.mentions : [],
+  }));
+
+  out.notifications = out.notifications
+    .filter((n: any) => n && typeof n === "object")
+    .map((n: any) => ({
+      id: String(n.id ?? nid("n")),
+      userId: String(n.userId ?? ""),
+      type: n.type ?? "comment",
+      title: String(n.title ?? ""),
+      body: String(n.body ?? ""),
+      taskId: typeof n.taskId === "string" ? n.taskId : undefined,
+      commentId: typeof n.commentId === "string" ? n.commentId : undefined,
+      eventId: n.eventId,
+      createdAt: typeof n.createdAt === "string" ? n.createdAt : new Date().toISOString(),
+      read: !!n.read,
+    }));
+
+  out.audit = out.audit
+    .filter((e: any) => e && typeof e === "object")
+    .map((e: any) => ({
+      id: String(e.id ?? nid("log")),
+      actorId: String(e.actorId ?? ""),
+      taskId: typeof e.taskId === "string" ? e.taskId : undefined,
+      action: e.action ?? "status_changed",
+      detail: typeof e.detail === "string" ? e.detail : undefined,
+      createdAt: typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
+    }));
+
+  out.activity = out.activity
+    .filter((e: any) => e && typeof e === "object")
+    .map((e: any) => ({
+      id: String(e.id ?? nid("e")),
+      taskId: String(e.taskId ?? ""),
+      type: e.type ?? "status_changed",
+      actorId: String(e.actorId ?? ""),
+      createdAt: typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
+      detail: typeof e.detail === "string" ? e.detail : undefined,
+    }));
+
+  // Merge missing permission keys from defaults.
+  const defaults = defaultRolePerms();
+  const perms: any = { ...defaults, ...(out.rolePermissions ?? {}) };
+  for (const r of Object.keys(defaults)) {
+    if (!Array.isArray(perms[r])) perms[r] = defaults[r as keyof typeof defaults];
+  }
+  // Admins must always retain manage_permissions.
+  if (Array.isArray(perms.admin) && !perms.admin.includes("manage_permissions")) {
+    perms.admin = [...perms.admin, "manage_permissions"];
+  }
+  out.rolePermissions = perms;
+
+  // Fallback for currentUserId → boss if missing/inactive.
+  const cu = out.users.find((u: any) => u.id === out.currentUserId && u.active !== false && !u.archived);
+  if (!cu) out.currentUserId = out.users.find((u: any) => u.role === "boss" && u.active !== false)?.id ?? out.users[0]?.id ?? "u1";
+
+  if (typeof out.taskCounter !== "number") out.taskCounter = out.tasks.length;
+  out.seeded = true;
+  return out;
 }
 
 function logActivity(state: Store, taskId: string, type: ActivityType, actorId: string, detail?: string) {
