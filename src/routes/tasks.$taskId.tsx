@@ -47,8 +47,8 @@ function TaskDetail() {
   const canAck = task.status === "new" && (user.role === "dept_head" || user.role === "employee");
   const canSubmit = ["dept_head", "employee"].includes(user.role) && ["received", "in_progress"].includes(task.status);
 
-  async function ack() { await taskService.acknowledge(task.id, uid); qc.invalidateQueries({ queryKey: ["task", task.id] }); toast.success("تم تأكيد استلام التكليف"); }
-  async function submit() { await taskService.updateStatus(task.id, "submitted", uid); qc.invalidateQueries({ queryKey: ["task", task.id] }); toast.success("تم تقديم التكليف للمراجعة"); }
+  async function ack() { if (!task) return; await taskService.acknowledge(task.id, uid); qc.invalidateQueries({ queryKey: ["task", task.id] }); toast.success("تم تأكيد استلام التكليف"); }
+  async function submit() { if (!task) return; await taskService.updateStatus(task.id, "submitted", uid); qc.invalidateQueries({ queryKey: ["task", task.id] }); toast.success("تم تقديم التكليف للمراجعة"); }
 
   return (
     <AppShell>
