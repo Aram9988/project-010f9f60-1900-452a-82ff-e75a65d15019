@@ -2,10 +2,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * Institutional logo. Drop the transparent PNG asset at
- * `src/assets/logo.png` (or edit LOGO_SRC below) — this component
+ * `src/assets/logo.svg` (or edit LOGO_SRC below) — this component
  * gracefully falls back to a badge if the asset is missing.
  */
-export const LOGO_SRC = "/logo.png"; // placed in /public — replace with the gold eagle PNG
+export const LOGO_SRC = "/logo.svg"; // placed in /public — replace with the gold eagle PNG
 
 export function Logo({ size = 40, className, showFallbackLetters = true }: {
   size?: number; className?: string; showFallbackLetters?: boolean;
