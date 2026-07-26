@@ -130,10 +130,10 @@ function initialData(): AppData {
     comments: seedComments.map((c) => ({ ...c })),
     activity: seedActivity.map((a) => ({ ...a })),
     notifications: [],
-    audit: seedActivity.map((e) => ({
-      id: "log_" + e.id, actorId: e.actorId, taskId: e.taskId,
-      action: e.action ?? (e as any).type, detail: e.detail, createdAt: e.createdAt,
-    } as AuditEntry)),
+      audit: seedActivity.map((e) => ({
+        id: "log_" + e.id, actorId: e.actorId, taskId: e.taskId,
+        action: e.type, detail: e.detail, createdAt: e.createdAt,
+      } as AuditEntry)),
     passwordRequests: [],
     rolePermissions: defaultRolePerms(),
     taskCounter: seedTasks.length,
