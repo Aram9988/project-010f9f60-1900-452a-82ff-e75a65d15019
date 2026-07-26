@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/lib/store";
 import { getUser, userService } from "@/services/userService";
+import { firstAllowedRoute } from "@/lib/nav";
 import { ROLE_LABELS } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,20 +24,29 @@ export function TopBar() {
   const toggleTheme = useSession((s) => s.toggleTheme);
   const toggleSidebar = useSession((s) => s.toggleSidebar);
   const user = getUser(userId);
+  const isDiwan = user?.role === "diwan";
 
   const { data: allUsers = [] } = useQuery({ queryKey: ["users"], queryFn: () => userService.list() });
   const { data: notifs = [] } = useQuery({
     queryKey: ["notifs", userId],
     queryFn: () => notificationService.listForUser(userId),
     refetchInterval: 3000,
+    enabled: !isDiwan,
   });
   const unread = notifs.filter((n) => !n.read).length;
 
   async function openNotif(n: (typeof notifs)[number]) {
     await notificationService.markRead(n.id);
     qc.invalidateQueries({ queryKey: ["notifs", userId] });
-    if (n.taskId) nav({ to: "/tasks/$taskId", params: { taskId: n.taskId } });
-    else nav({ to: "/notifications" });
+    if (n.commentId && n.taskId) {
+      nav({ to: "/tasks/$taskId", params: { taskId: n.taskId }, search: { commentId: n.commentId } as any });
+    } else if (n.type === "password_request") {
+      nav({ to: "/change-password" });
+    } else if (n.taskId) {
+      nav({ to: "/tasks/$taskId", params: { taskId: n.taskId } });
+    } else {
+      nav({ to: "/notifications" });
+    }
   }
 
   return (
@@ -45,15 +55,17 @@ export function TopBar() {
         <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleSidebar}>
           <Menu className="h-5 w-5" />
         </Button>
-        <Link to="/dashboard" className="shrink-0"><BrandBlock /></Link>
+        <Link to={firstAllowedRoute(user)} className="shrink-0"><BrandBlock /></Link>
 
-        <div className="flex-1 mx-2 max-w-xl hidden md:block">
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="بحث في التكليفات…" className="pr-9 bg-background"
-              onKeyDown={(e) => { if (e.key === "Enter") nav({ to: "/tasks", search: { q: (e.currentTarget as HTMLInputElement).value } as any }); }} />
+        {!isDiwan && (
+          <div className="flex-1 mx-2 max-w-xl hidden md:block">
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="بحث في التكليفات المصرح لك بعرضها…" className="pr-9 bg-background"
+                onKeyDown={(e) => { if (e.key === "Enter") nav({ to: "/tasks", search: { q: (e.currentTarget as HTMLInputElement).value } as any }); }} />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mr-auto flex items-center gap-1">
           <DropdownMenu>
@@ -64,10 +76,15 @@ export function TopBar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64 max-h-96 overflow-y-auto">
-              <DropdownMenuLabel>الدخول كمستخدم آخر (تجريبي)</DropdownMenuLabel>
+              <DropdownMenuLabel>الدخول كمستخدم آخر — نموذج تجريبي فقط</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {allUsers.filter((u) => u.active !== false).map((u) => (
-                <DropdownMenuItem key={u.id} onClick={() => { setUser(u.id); qc.invalidateQueries(); }} className="flex-col items-start gap-0">
+                <DropdownMenuItem key={u.id} onClick={() => {
+                  setUser(u.id);
+                  qc.invalidateQueries();
+                  // route to first allowed route for new identity
+                  nav({ to: firstAllowedRoute(u) });
+                }} className="flex-col items-start gap-0">
                   <span className="font-medium">{u.name}</span>
                   <span className="text-xs text-muted-foreground">{ROLE_LABELS[u.role]}</span>
                 </DropdownMenuItem>
@@ -75,7 +92,7 @@ export function TopBar() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Popover>
+          {!isDiwan && <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
@@ -110,7 +127,7 @@ export function TopBar() {
                 ))}
               </div>
             </PopoverContent>
-          </Popover>
+          </Popover>}
 
           <Button variant="ghost" size="icon" onClick={toggleTheme} title="تبديل السمة">
             {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
