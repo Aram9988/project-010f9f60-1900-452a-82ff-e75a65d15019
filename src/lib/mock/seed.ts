@@ -10,26 +10,27 @@ import type {
 
 // ---------- Departments ----------
 export const departments: Department[] = [
-  { id: "d1", name: "قسم الدراسات والبنى التحتية", short: "الدراسات", headId: "u4" },
-  { id: "d2", name: "قسم الشبكات والأنظمة", short: "الشبكات", headId: "u5" },
-  { id: "d3", name: "قسم الصيانة والدعم الفني", short: "الصيانة", headId: "u6" },
-  { id: "d4", name: "قسم الاتصالات والتجهيزات", short: "الاتصالات", headId: "u7" },
+  { id: "d1", name: "قسم الدراسات والبنى التحتية", short: "الدراسات", code: "STD", headId: "u4", officeResponsibleId: "u3" },
+  { id: "d2", name: "قسم الشبكات والأنظمة", short: "الشبكات", code: "NET", headId: "u5", officeResponsibleId: "u3" },
+  { id: "d3", name: "قسم الصيانة والدعم الفني", short: "الصيانة", code: "MNT", headId: "u6" },
+  { id: "d4", name: "قسم الاتصالات والتجهيزات", short: "الاتصالات", code: "COM", headId: "u7" },
 ];
 
 // ---------- Users ----------
 export const users: User[] = [
-  { id: "u1", name: "العميد محمد الأحمد", role: "boss", username: "boss", rank: "عميد" },
-  { id: "u2", name: "العقيد سامر الحلبي", role: "associate", username: "associate", rank: "عقيد" },
-  { id: "u3", name: "الرائد ياسر الحسن", role: "office", username: "office", rank: "رائد" },
-  { id: "u4", name: "المقدم فادي شاهين", role: "dept_head", departmentId: "d1", username: "head1", rank: "مقدم" },
-  { id: "u5", name: "المقدم عمر الخطيب", role: "dept_head", departmentId: "d2", username: "head2", rank: "مقدم" },
-  { id: "u6", name: "الرائد بشار قاسم", role: "dept_head", departmentId: "d3", username: "head3", rank: "رائد" },
-  { id: "u7", name: "الرائد وسيم درويش", role: "dept_head", departmentId: "d4", username: "head4", rank: "رائد" },
-  { id: "u8", name: "الملازم أول أحمد سليمان", role: "employee", departmentId: "d1", username: "emp1", rank: "ملازم أول" },
-  { id: "u9", name: "الملازم كنان زيدان", role: "employee", departmentId: "d2", username: "emp2", rank: "ملازم" },
-  { id: "u10", name: "الرقيب حسان العلي", role: "employee", departmentId: "d3", username: "emp3", rank: "رقيب" },
-  { id: "u11", name: "الرقيب يزن العمر", role: "employee", departmentId: "d4", username: "emp4", rank: "رقيب" },
-  { id: "u12", name: "الرائد نور الدين خالد", role: "admin", username: "admin", rank: "رائد" },
+  { id: "u1", name: "العميد محمد الأحمد", role: "boss", username: "boss", rank: "عميد", active: true },
+  { id: "u2", name: "العقيد سامر الحلبي", role: "associate", username: "associate", rank: "عقيد", active: true },
+  { id: "u3", name: "الرائد ياسر الحسن", role: "office", username: "office", rank: "رائد", departmentId: "d1", active: true },
+  { id: "u4", name: "المقدم فادي شاهين", role: "dept_head", departmentId: "d1", username: "head1", rank: "مقدم", active: true },
+  { id: "u5", name: "المقدم عمر الخطيب", role: "dept_head", departmentId: "d2", username: "head2", rank: "مقدم", active: true },
+  { id: "u6", name: "الرائد بشار قاسم", role: "dept_head", departmentId: "d3", username: "head3", rank: "رائد", active: true },
+  { id: "u7", name: "الرائد وسيم درويش", role: "dept_head", departmentId: "d4", username: "head4", rank: "رائد", active: true },
+  { id: "u8", name: "الملازم أول أحمد سليمان", role: "employee", departmentId: "d1", username: "emp1", rank: "ملازم أول", active: true },
+  { id: "u9", name: "الملازم كنان زيدان", role: "employee", departmentId: "d2", username: "emp2", rank: "ملازم", active: true },
+  { id: "u10", name: "الرقيب حسان العلي", role: "employee", departmentId: "d3", username: "emp3", rank: "رقيب", active: true },
+  { id: "u11", name: "الرقيب يزن العمر", role: "employee", departmentId: "d4", username: "emp4", rank: "رقيب", active: true },
+  { id: "u12", name: "الرائد نور الدين خالد", role: "admin", username: "admin", rank: "رائد", active: true },
+  { id: "u13", name: "الملازم رائد الحمصي", role: "diwan", username: "diwan", rank: "ملازم", active: true },
 ];
 
 const now = new Date();
@@ -39,6 +40,9 @@ const daysFromNow = (n: number, h = 12) => {
   d.setHours(h, 0, 0, 0);
   return d.toISOString();
 };
+
+// helpers to keep old records — dueAt has been removed from the model
+// so simply drop the field from every seed record below.
 
 // ---------- Tasks ----------
 export const tasks: Task[] = [
