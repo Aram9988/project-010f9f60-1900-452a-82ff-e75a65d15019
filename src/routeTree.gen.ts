@@ -22,6 +22,7 @@ import { Route as TasksIndexRouteImport } from './routes/tasks.index'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
 import { Route as TasksMineRouteImport } from './routes/tasks.mine'
+import { Route as TasksArchivedRouteImport } from './routes/tasks.archived'
 import { Route as TasksTaskIdRouteImport } from './routes/tasks.$taskId'
 import { Route as ReportsReportIdRouteImport } from './routes/reports.$reportId'
 
@@ -90,6 +91,11 @@ const TasksMineRoute = TasksMineRouteImport.update({
   path: '/tasks/mine',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TasksArchivedRoute = TasksArchivedRouteImport.update({
+  id: '/tasks/archived',
+  path: '/tasks/archived',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TasksTaskIdRoute = TasksTaskIdRouteImport.update({
   id: '/tasks/$taskId',
   path: '/tasks/$taskId',
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof UsersRoute
   '/reports/$reportId': typeof ReportsReportIdRoute
   '/tasks/$taskId': typeof TasksTaskIdRoute
+  '/tasks/archived': typeof TasksArchivedRoute
   '/tasks/mine': typeof TasksMineRoute
   '/tasks/new': typeof TasksNewRoute
   '/reports/': typeof ReportsIndexRoute
@@ -130,6 +137,7 @@ export interface FileRoutesByTo {
   '/users': typeof UsersRoute
   '/reports/$reportId': typeof ReportsReportIdRoute
   '/tasks/$taskId': typeof TasksTaskIdRoute
+  '/tasks/archived': typeof TasksArchivedRoute
   '/tasks/mine': typeof TasksMineRoute
   '/tasks/new': typeof TasksNewRoute
   '/reports': typeof ReportsIndexRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/users': typeof UsersRoute
   '/reports/$reportId': typeof ReportsReportIdRoute
   '/tasks/$taskId': typeof TasksTaskIdRoute
+  '/tasks/archived': typeof TasksArchivedRoute
   '/tasks/mine': typeof TasksMineRoute
   '/tasks/new': typeof TasksNewRoute
   '/reports/': typeof ReportsIndexRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/reports/$reportId'
     | '/tasks/$taskId'
+    | '/tasks/archived'
     | '/tasks/mine'
     | '/tasks/new'
     | '/reports/'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/reports/$reportId'
     | '/tasks/$taskId'
+    | '/tasks/archived'
     | '/tasks/mine'
     | '/tasks/new'
     | '/reports'
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/reports/$reportId'
     | '/tasks/$taskId'
+    | '/tasks/archived'
     | '/tasks/mine'
     | '/tasks/new'
     | '/reports/'
@@ -219,6 +231,7 @@ export interface RootRouteChildren {
   UsersRoute: typeof UsersRoute
   ReportsReportIdRoute: typeof ReportsReportIdRoute
   TasksTaskIdRoute: typeof TasksTaskIdRoute
+  TasksArchivedRoute: typeof TasksArchivedRoute
   TasksMineRoute: typeof TasksMineRoute
   TasksNewRoute: typeof TasksNewRoute
   ReportsIndexRoute: typeof ReportsIndexRoute
@@ -318,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksMineRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tasks/archived': {
+      id: '/tasks/archived'
+      path: '/tasks/archived'
+      fullPath: '/tasks/archived'
+      preLoaderRoute: typeof TasksArchivedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tasks/$taskId': {
       id: '/tasks/$taskId'
       path: '/tasks/$taskId'
@@ -347,6 +367,7 @@ const rootRouteChildren: RootRouteChildren = {
   UsersRoute: UsersRoute,
   ReportsReportIdRoute: ReportsReportIdRoute,
   TasksTaskIdRoute: TasksTaskIdRoute,
+  TasksArchivedRoute: TasksArchivedRoute,
   TasksMineRoute: TasksMineRoute,
   TasksNewRoute: TasksNewRoute,
   ReportsIndexRoute: ReportsIndexRoute,
