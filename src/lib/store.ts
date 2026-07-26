@@ -219,9 +219,20 @@ export const useAppStore = create<Store>()(
         set((s) => ({ departments: [...s.departments, d] }));
         return d;
       },
-      updateDepartment: (id, patch) => set((s) => ({
-        departments: s.departments.map((d) => (d.id === id ? { ...d, ...patch } : d)),
-      })),
+      updateDepartment: (id, patch) => set((s) => {
+        const departments = s.departments.map((d) => (d.id === id ? { ...d, ...patch } : d));
+        // Sync assigned head/office → departmentId & role
+        let users = s.users;
+        if (patch.headId) {
+          users = users.map((u) => u.id === patch.headId
+            ? { ...u, departmentId: id, role: u.role === "boss" || u.role === "associate" || u.role === "admin" ? u.role : "dept_head" }
+            : u);
+        }
+        if (patch.officeResponsibleId) {
+          users = users.map((u) => u.id === patch.officeResponsibleId ? { ...u, departmentId: id, role: "office" } : u);
+        }
+        return { departments, users };
+      }),
       archiveDepartment: (id) => set((s) => ({
         departments: s.departments.map((d) => (d.id === id ? { ...d, archived: true } : d)),
       })),
