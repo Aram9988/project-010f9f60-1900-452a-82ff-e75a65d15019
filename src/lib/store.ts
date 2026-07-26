@@ -102,6 +102,8 @@ type Store = UISession & AppData & {
   }) => Comment;
   acknowledgeInstruction: (commentId: string, userId: string) => void;
   hideComment: (commentId: string, actorId: string) => void;
+  editComment: (commentId: string, actorId: string, newBody: string) => void;
+  markQuestionAnswered: (commentId: string, actorId: string) => void;
   // attachments
   addAttachment: (taskId: string, actorId: string, att: Attachment) => void;
   removeAttachment: (taskId: string, actorId: string, attId: string) => void;
@@ -231,7 +233,7 @@ export const useAppStore = create<Store>()(
         const hasUsers = s.users.some((u) => u.departmentId === id && u.active !== false && !u.archived);
         const hasTasks = s.tasks.some((t) => t.departmentId === id && !t.archived && !t.deletedAt && !["approved","archived","cancelled"].includes(t.status));
         if (hasUsers || hasTasks) {
-          return { ok: false, reason: "لا يمكن حذف قسم يحتوي على مستخدمين نشطين أو تكليفات مفتوحة. أعد تعيينهم أولاً." };
+          return { ok: false, reason: "لا يمكن حذف قسم يحتوي على مستخدمين نشطين أو تكليفات مفتوحة. أعد تعيينهم لقسم آخر أولاً أو استخدم الأرشفة." };
         }
         set({ departments: s.departments.filter((d) => d.id !== id) });
         return { ok: true };
@@ -491,6 +493,21 @@ export const useAppStore = create<Store>()(
         return {};
       }),
 
+      editComment: (commentId, actorId, newBody) => set((st) => {
+        const c = st.comments.find((x) => x.id === commentId); if (!c) return {};
+        if (!c.edited) c.originalBody = c.body;
+        c.body = newBody; c.edited = true; c.editedAt = nowIso();
+        logActivity(st as Store, c.taskId, "comment_edited", actorId, newBody.slice(0, 120));
+        return {};
+      }),
+
+      markQuestionAnswered: (commentId, actorId) => set((st) => {
+        const c = st.comments.find((x) => x.id === commentId); if (!c || c.type !== "question") return {};
+        c.questionStatus = "answered";
+        logActivity(st as Store, c.taskId, "comment_added", actorId, "تم اعتبار السؤال مُجاباً");
+        return {};
+      }),
+
       // ------ Attachments (metadata in store; data URL kept inline; large blobs -> future IndexedDB) ------
       addAttachment: (taskId, actorId, att) => set((st) => {
         const t = st.tasks.find((x) => x.id === taskId); if (!t) return {};
@@ -506,7 +523,13 @@ export const useAppStore = create<Store>()(
         const t = st.tasks.find((x) => x.id === taskId); if (!t) return {};
         const removed = t.attachments.find((a) => a.id === attId);
         t.attachments = t.attachments.filter((a) => a.id !== attId);
-        if (removed) logActivity(st as Store, taskId, "file_removed", actorId, removed.name);
+        if (removed) {
+          logActivity(st as Store, taskId, "file_removed", actorId, removed.name);
+          notifyMany(st as Store, taskAudience(t, st), actorId, {
+            type: "attachment", title: "تم حذف مرفق",
+            body: `${t.number}: ${removed.name}`, taskId,
+          });
+        }
         return {};
       }),
 
@@ -519,8 +542,22 @@ export const useAppStore = create<Store>()(
       })),
     }),
     {
-      name: "tk-app-v3",
-      version: 3,
+      name: "tk-app-v4",
+      version: 4,
+      migrate: (persisted: any, from) => {
+        // Any state persisted before v4 lacks Diwan/permission fixes and
+        // may contain deadline artefacts — reseed cleanly.
+        if (!persisted || from < 4) {
+          return {
+            currentUserId: "u1",
+            theme: persisted?.theme ?? "light",
+            sidebarCollapsed: persisted?.sidebarCollapsed ?? false,
+            recentDepartments: [],
+            ...initialData(),
+          } as any;
+        }
+        return persisted;
+      },
       partialize: (s) => ({
         currentUserId: s.currentUserId,
         theme: s.theme,
