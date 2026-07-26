@@ -115,6 +115,8 @@ export interface Comment {
   body: string;
   createdAt: string;
   edited?: boolean;
+  originalBody?: string;
+  editedAt?: string;
   hidden?: boolean;
   pinned?: boolean;
   isFormalInstruction?: boolean;
@@ -138,6 +140,7 @@ export type ActivityType =
   | "task_acknowledged"
   | "comment_added"
   | "reply_added"
+  | "comment_edited"
   | "formal_instruction_issued"
   | "instruction_acknowledged"
   | "file_uploaded"
@@ -159,6 +162,7 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   task_acknowledged: "تأكيد الاستلام",
   comment_added: "إضافة تعليق",
   reply_added: "إضافة رد",
+  comment_edited: "تعديل تعليق",
   formal_instruction_issued: "إصدار توجيه رسمي",
   instruction_acknowledged: "تأكيد استلام توجيه",
   file_uploaded: "رفع مرفق",
@@ -238,6 +242,7 @@ export interface AppNotification {
   body: string;
   taskId?: string;
   commentId?: string;
+  eventId?: string;
   createdAt: string;
   read: boolean;
 }
