@@ -721,12 +721,6 @@ export const useAppStore = create<Store>()(
         }
         return normalizePersistedState(persisted);
       },
-      merge: (persisted: any, current: any) => {
-        // Runs on every rehydrate — normalize whatever was on disk so a
-        // partial/malformed shape can never crash the UI.
-        const safe = normalizePersistedState(persisted ?? {});
-        return { ...current, ...safe };
-      },
       partialize: (s) => ({
         currentUserId: s.currentUserId,
         theme: s.theme,
