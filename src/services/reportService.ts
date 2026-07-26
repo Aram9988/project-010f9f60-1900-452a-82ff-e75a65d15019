@@ -2,7 +2,7 @@ import { useAppStore } from "@/lib/store";
 import { scopeTasks, hasPermission } from "@/lib/authz";
 import type { ActivityEvent, ActivityType, User } from "@/lib/types";
 
-export type ReportPeriod = "day" | "week" | "month" | "custom";
+export type ReportPeriod = "daily" | "weekly" | "monthly" | "custom" | "completed" | "in_progress";
 
 export interface ReportDef {
   id: string;
@@ -12,9 +12,11 @@ export interface ReportDef {
 }
 
 export const REPORTS: ReportDef[] = [
-  { id: "daily", title: "التقرير اليومي", description: "الأحداث والتحديثات الفعلية خلال اليوم فقط.", category: "daily" },
-  { id: "weekly", title: "التقرير الأسبوعي", description: "أحداث الأسبوع مجمّعة حسب التكليف.", category: "weekly" },
-  { id: "monthly", title: "التقرير الشهري", description: "أحداث الشهر مجمّعة حسب التكليف.", category: "monthly" },
+  { id: "daily", title: "التقرير اليومي", description: "الأحداث والتحديثات الفعلية خلال يوم محدد فقط.", category: "daily" },
+  { id: "weekly", title: "التقرير الأسبوعي", description: "أحداث أسبوع محدد مجمّعة حسب التكليف.", category: "weekly" },
+  { id: "monthly", title: "التقرير الشهري", description: "أحداث شهر محدد مجمّعة حسب التكليف.", category: "monthly" },
+  { id: "completed", title: "التكليفات المُنجزة", description: "التكليفات التي اعتُمدت (أُنجزت رسمياً) خلال الفترة.", category: "analysis" },
+  { id: "in_progress", title: "التكليفات قيد التنفيذ", description: "التكليفات التي جرى العمل عليها خلال الفترة (لم تُنجز بعد).", category: "analysis" },
   { id: "custom", title: "تقرير حسب فترة مخصصة", description: "اختر تاريخ البدء والانتهاء.", category: "analysis" },
 ];
 
@@ -37,17 +39,33 @@ export interface ReportFilters {
   eventType?: ActivityType;
 }
 
-export function periodRange(period: ReportPeriod, from?: string, to?: string): { from: string; to: string } {
-  const now = new Date();
-  const end = new Date(now); end.setHours(23, 59, 59, 999);
-  const start = new Date(now); start.setHours(0, 0, 0, 0);
-  if (period === "day") return { from: start.toISOString(), to: end.toISOString() };
-  if (period === "week") { start.setDate(start.getDate() - 6); return { from: start.toISOString(), to: end.toISOString() }; }
-  if (period === "month") { start.setDate(start.getDate() - 29); return { from: start.toISOString(), to: end.toISOString() }; }
-  return {
-    from: from ? new Date(from).toISOString() : start.toISOString(),
-    to: to ? new Date(to).toISOString() : end.toISOString(),
-  };
+/** Exact calendar periods (anchored on `anchor` date, default = today). */
+export function periodRange(period: ReportPeriod, from?: string, to?: string, anchor?: string): { from: string; to: string } {
+  const base = anchor ? new Date(anchor) : new Date();
+  if (isNaN(base.getTime())) base.setTime(Date.now());
+  const start = new Date(base); const end = new Date(base);
+  start.setHours(0,0,0,0); end.setHours(23,59,59,999);
+
+  if (period === "daily") {
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+  if (period === "weekly") {
+    // ISO week starts Monday
+    const day = start.getDay(); // 0=Sun..6=Sat
+    const diffToMonday = (day + 6) % 7;
+    start.setDate(start.getDate() - diffToMonday);
+    end.setTime(start.getTime()); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+  if (period === "monthly") {
+    start.setDate(1);
+    end.setTime(start.getTime()); end.setMonth(start.getMonth() + 1); end.setDate(0); end.setHours(23,59,59,999);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+  // custom / completed / in_progress use explicit from/to
+  const s = from ? new Date(from) : new Date(); if (from) s.setHours(0,0,0,0);
+  const e = to ? new Date(to) : new Date(); if (to) e.setHours(23,59,59,999);
+  return { from: s.toISOString(), to: e.toISOString() };
 }
 
 export const reportService = {
@@ -55,7 +73,7 @@ export const reportService = {
   async byId(id: string): Promise<ReportDef | undefined> { return REPORTS.find((r) => r.id === id); },
 
   /** Build an activity-based report scoped by authorization. */
-  async build(user: User | undefined, filters: ReportFilters): Promise<ReportRow[]> {
+  async build(user: User | undefined, filters: ReportFilters & { mode?: "activity" | "completed" | "in_progress" }): Promise<ReportRow[]> {
     if (!user || !hasPermission(user, "view_reports")) return [];
     const s = useAppStore.getState();
     const tasks = scopeTasks(user, s.tasks);
@@ -73,6 +91,20 @@ export const reportService = {
       if (filters.eventType && e.type !== filters.eventType) return false;
       return true;
     });
+
+    if (filters.mode === "completed") {
+      const approvedTaskIds = new Set(
+        s.activity.filter((e) => e.type === "task_approved" && new Date(e.createdAt).getTime() >= from && new Date(e.createdAt).getTime() <= to)
+          .map((e) => e.taskId),
+      );
+      events = events.filter((e) => approvedTaskIds.has(e.taskId));
+    } else if (filters.mode === "in_progress") {
+      // Only tasks that saw movement in-period AND are not yet approved by period end.
+      const approvedByEnd = new Set(
+        s.activity.filter((e) => e.type === "task_approved" && new Date(e.createdAt).getTime() <= to).map((e) => e.taskId),
+      );
+      events = events.filter((e) => !approvedByEnd.has(e.taskId));
+    }
 
     const grouped = new Map<string, ReportRow>();
     for (const ev of events) {
