@@ -14,14 +14,11 @@ export function canAccessTask(user: User | undefined, task: Task): boolean {
   if (task.archived && !hasPermission(user, "view_archived_tasks")) return false;
   if (hasPermission(user, "view_all_tasks")) return true;
   if (hasPermission(user, "view_department_tasks")) {
-    // office users must be pinned to a single department
-    if (user.role === "office" && user.departmentId) return task.departmentId === user.departmentId;
-    if (user.departmentId && task.departmentId === user.departmentId) return true;
-    // employees also as assignee/participant
-    if (task.assigneeId === user.id) return true;
-    if (task.participantIds.includes(user.id)) return true;
-    if (task.deptHeadId === user.id) return true;
-    return false;
+    // Department is the ONLY gate. Assignment/participation in another
+    // department must never widen scope — that would leak cross-department
+    // task titles, numbers, and discussion content.
+    if (!user.departmentId) return false;
+    return task.departmentId === user.departmentId;
   }
   return false;
 }
