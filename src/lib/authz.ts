@@ -37,3 +37,12 @@ export function scopedDepartments(user: User | undefined): string[] | undefined 
   if (user.departmentId) return [user.departmentId];
   return [];
 }
+
+/** All users currently authorized to see this task (used for notification fan-out). */
+export function authorizedRecipients(task: Task): string[] {
+  const users = useAppStore.getState().users;
+  return users
+    .filter((u) => u.active !== false && !u.archived)
+    .filter((u) => canAccessTask(u, task))
+    .map((u) => u.id);
+}
