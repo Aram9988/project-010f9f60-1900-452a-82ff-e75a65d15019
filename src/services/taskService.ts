@@ -1,65 +1,38 @@
-import { tasks, activity } from "@/lib/mock/seed";
-import type { Task, TaskStatus, ActivityEvent } from "@/lib/types";
+import { useAppStore } from "@/lib/store";
+import { scopeTasks } from "@/lib/authz";
+import type { ActivityEvent, Task, TaskStatus, User } from "@/lib/types";
 
 export const taskService = {
-  async list(): Promise<Task[]> { return [...tasks]; },
-  async byId(id: string): Promise<Task | undefined> { return tasks.find((t) => t.id === id); },
-  async create(input: Partial<Task>): Promise<Task> {
-    const num = tasks.length + 1;
-    const t: Task = {
-      id: "t" + Date.now(),
-      number: "TK-2026-" + String(1000 + num).padStart(4, "0"),
-      title: input.title || "بدون عنوان",
-      description: input.description || "",
-      issuedById: input.issuedById || "u1",
-      departmentId: input.departmentId || "d1",
-      deptHeadId: input.deptHeadId,
-      assigneeId: input.assigneeId,
-      participantIds: input.participantIds || [],
-      issuedAt: new Date().toISOString(),
-      dueAt: input.dueAt || new Date(Date.now() + 7 * 86400000).toISOString(),
-      priority: input.priority || "normal",
-      status: input.status || "new",
-      progress: 0,
-      tags: input.tags || [],
-      attachments: [],
-      subtasks: [],
-    };
-    tasks.unshift(t);
-    activity.unshift({ id: "e" + Date.now(), taskId: t.id, type: "task_created", actorId: t.issuedById, createdAt: t.issuedAt });
-    return t;
+  async list(): Promise<Task[]> { return useAppStore.getState().tasks; },
+  async listActive(): Promise<Task[]> { return useAppStore.getState().tasks.filter((t) => !t.archived); },
+  async listArchived(): Promise<Task[]> { return useAppStore.getState().tasks.filter((t) => t.archived); },
+  async byId(id: string): Promise<Task | undefined> { return useAppStore.getState().tasks.find((t) => t.id === id); },
+  async create(input: Partial<Task> & { title: string; departmentId: string; issuedById: string }): Promise<Task> {
+    return useAppStore.getState().createTask(input);
   },
   async updateStatus(id: string, status: TaskStatus, actorId: string) {
-    const t = tasks.find((x) => x.id === id); if (!t) return;
-    t.status = status;
-    activity.unshift({ id: "e" + Date.now(), taskId: id, type: "status_changed", actorId, createdAt: new Date().toISOString(), detail: status });
+    useAppStore.getState().updateTaskStatus(id, status, actorId);
   },
   async updateProgress(id: string, progress: number, actorId: string) {
-    const t = tasks.find((x) => x.id === id); if (!t) return;
-    t.progress = progress;
-    activity.unshift({ id: "e" + Date.now(), taskId: id, type: "progress_updated", actorId, createdAt: new Date().toISOString(), detail: progress + "٪" });
+    useAppStore.getState().updateTaskProgress(id, progress, actorId);
   },
-  async approve(id: string, actorId: string) {
-    const t = tasks.find((x) => x.id === id); if (!t) return;
-    t.status = "approved"; t.approvedById = actorId; t.approvedAt = new Date().toISOString();
-    activity.unshift({ id: "e" + Date.now(), taskId: id, type: "task_approved", actorId, createdAt: t.approvedAt });
-  },
-  async returnForRevision(id: string, actorId: string, reason: string) {
-    const t = tasks.find((x) => x.id === id); if (!t) return;
-    t.status = "returned"; t.delayReason = reason;
-    activity.unshift({ id: "e" + Date.now(), taskId: id, type: "task_returned", actorId, createdAt: new Date().toISOString(), detail: reason });
-  },
-  async acknowledge(id: string, actorId: string) {
-    const t = tasks.find((x) => x.id === id); if (!t) return;
-    if (t.status === "new") t.status = "received";
-    activity.unshift({ id: "e" + Date.now(), taskId: id, type: "task_acknowledged", actorId, createdAt: new Date().toISOString() });
-  },
+  async acknowledge(id: string, actorId: string) { useAppStore.getState().acknowledgeTask(id, actorId); },
+  async submit(id: string, actorId: string, summary?: string) { useAppStore.getState().submitTask(id, actorId, summary); },
+  async approve(id: string, actorId: string) { useAppStore.getState().approveTask(id, actorId); },
+  async returnForRevision(id: string, actorId: string, reason: string) { useAppStore.getState().returnTask(id, actorId, reason); },
+  async archive(id: string, actorId: string, reason: string) { useAppStore.getState().archiveTask(id, actorId, reason); },
+  async restore(id: string, actorId: string) { useAppStore.getState().restoreTask(id, actorId); },
+  async permanentlyDelete(id: string, actorId: string) { useAppStore.getState().permanentlyDeleteTask(id, actorId); },
   async activityFor(taskId: string): Promise<ActivityEvent[]> {
-    return activity.filter((a) => a.taskId === taskId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return useAppStore.getState().activity
+      .filter((a) => a.taskId === taskId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   },
 };
 
-export function tasksForUser(userId: string, role: string): Task[] {
-  if (["boss", "associate", "office", "admin"].includes(role)) return tasks;
-  return tasks.filter((t) => t.assigneeId === userId || t.deptHeadId === userId || t.participantIds.includes(userId));
+/** Legacy helper — now goes through central authorization. */
+export function tasksForUser(userId: string, _role?: string): Task[] {
+  const state = useAppStore.getState();
+  const user = state.users.find((u) => u.id === userId);
+  return scopeTasks(user, state.tasks.filter((t) => !t.archived));
 }
