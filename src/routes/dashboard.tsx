@@ -1,30 +1,35 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSession } from "@/lib/store";
+import { useAppStore, useSession } from "@/lib/store";
 import { getUser } from "@/services/userService";
-import { taskService, tasksForUser } from "@/services/taskService";
-import { getDepartment, departmentService } from "@/services/departmentService";
 import { TaskTable } from "@/components/task/TaskTable";
 import { StatusBadge } from "@/components/badges";
-import { isOverdue } from "@/lib/format";
-import { STATUS_LABELS, ROLE_LABELS } from "@/lib/types";
-import { AlertTriangle, CheckCircle2, ClipboardList, Clock, FileCheck2, MessageCircle, ShieldAlert, TrendingUp } from "lucide-react";
+import { STATUS_LABELS, ROLE_LABELS, type TaskStatus } from "@/lib/types";
+import { scopeTasks, hasPermission } from "@/lib/authz";
+import { CheckCircle2, ClipboardList, Clock, FileCheck2, MessageCircle, RotateCcw, ShieldAlert, Sparkles, PauseCircle, Send } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from "recharts";
+import { AccessDenied } from "@/components/access-denied";
 
 export const Route = createFileRoute("/dashboard")({
-  head: () => ({ meta: [{ title: "لوحة التحكم — منظومة التكليفات" }, { name: "description", content: "لوحة تحكم رئيسية للتكليفات النشطة والمتأخرة." }] }),
+  head: () => ({
+    meta: [
+      { title: "لوحة التحكم — منظومة التكليفات" },
+      { name: "description", content: "لوحة تحكم رئيسية لمتابعة تكليفات فرع اتصالات ريف دمشق." },
+    ],
+  }),
   component: DashboardPage,
 });
 
-function Stat({ icon: Icon, label, value, tone = "primary" }: { icon: any; label: string; value: number | string; tone?: "primary" | "gold" | "destructive" | "success" }) {
+function Stat({ icon: Icon, label, value, tone = "primary" }: { icon: any; label: string; value: number | string; tone?: "primary" | "gold" | "destructive" | "success" | "info" | "muted" }) {
   const toneCls = {
     primary: "bg-primary/10 text-primary",
     gold: "bg-gold/15 text-gold-foreground",
     destructive: "bg-destructive/10 text-destructive",
-    success: "bg-success/15 text-success-foreground",
+    success: "bg-success/15 text-success",
+    info: "bg-info/10 text-info",
+    muted: "bg-muted text-muted-foreground",
   }[tone];
   return (
     <Card>
@@ -43,29 +48,40 @@ function Stat({ icon: Icon, label, value, tone = "primary" }: { icon: any; label
 
 function DashboardPage() {
   const uid = useSession((s) => s.currentUserId);
-  const user = getUser(uid)!;
-  const { data: allTasks = [] } = useQuery({ queryKey: ["tasks"], queryFn: () => taskService.list() });
-  const { data: depts = [] } = useQuery({ queryKey: ["depts"], queryFn: () => departmentService.list() });
+  const user = getUser(uid);
+  const allTasks = useAppStore((s) => s.tasks);
+  const depts = useAppStore((s) => s.departments);
 
-  const tasks = tasksForUser(uid, user.role);
-  const overdue = tasks.filter((t) => isOverdue(t.dueAt, t.status));
-  const critical = tasks.filter((t) => t.priority === "critical");
-  const submitted = tasks.filter((t) => t.status === "submitted");
-  const newTasks = tasks.filter((t) => t.status === "new");
-  const inProgress = tasks.filter((t) => t.status === "in_progress");
-  const blocked = tasks.filter((t) => t.status === "blocked");
-  const returned = tasks.filter((t) => t.status === "returned");
+  if (!user || (!hasPermission(user, "view_all_tasks") && !hasPermission(user, "view_department_tasks"))) {
+    return <AccessDenied />;
+  }
+
+  const scoped = scopeTasks(user, allTasks.filter((t) => !t.archived));
+  const count = (s: TaskStatus) => scoped.filter((t) => t.status === s).length;
+  const needsAttention = scoped.filter((t) => ["returned","waiting_info","blocked"].includes(t.status));
 
   const byStatus = Object.keys(STATUS_LABELS).map((k) => ({
-    name: STATUS_LABELS[k as keyof typeof STATUS_LABELS], value: tasks.filter((t) => t.status === k).length,
+    name: STATUS_LABELS[k as TaskStatus], value: count(k as TaskStatus),
   })).filter((x) => x.value > 0);
 
-  const byDept = depts.map((d) => ({ name: d.short, value: allTasks.filter((t) => t.departmentId === d.id).length }));
-  const trend = [
-    { m: "الأحد", done: 2 }, { m: "الاثنين", done: 4 }, { m: "الثلاثاء", done: 3 },
-    { m: "الأربعاء", done: 5 }, { m: "الخميس", done: 4 }, { m: "الجمعة", done: 2 }, { m: "السبت", done: 3 },
-  ];
-  const COLORS = ["#4b5c86", "#c39a44", "#4a9d6b", "#c34a44", "#4a86c3"];
+  const byDept = depts
+    .filter((d) => !d.archived)
+    .map((d) => ({ name: d.short, value: scoped.filter((t) => t.departmentId === d.id).length }))
+    .filter((x) => x.value > 0);
+
+  // real 7-day approval trend from activity
+  const trend: { m: string; done: number }[] = [];
+  const days = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+  const now = new Date();
+  const activity = useAppStore.getState().activity;
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now); d.setDate(now.getDate() - i); d.setHours(0,0,0,0);
+    const next = new Date(d); next.setDate(d.getDate() + 1);
+    const done = activity.filter((e) => e.type === "task_approved" && new Date(e.createdAt) >= d && new Date(e.createdAt) < next).length;
+    trend.push({ m: days[d.getDay()], done });
+  }
+
+  const COLORS = ["var(--color-primary)","var(--color-gold)","var(--color-success)","var(--color-info)","var(--color-destructive)"];
 
   return (
     <AppShell>
@@ -75,25 +91,42 @@ function DashboardPage() {
       />
 
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <Stat icon={ClipboardList} label="تكليفات جديدة" value={newTasks.length} />
-        <Stat icon={Clock} label="قيد التنفيذ" value={inProgress.length} />
-        <Stat icon={AlertTriangle} label="متأخرة" value={overdue.length} tone="destructive" />
-        <Stat icon={ShieldAlert} label="عاجل جداً" value={critical.length} tone="destructive" />
-        <Stat icon={FileCheck2} label="بانتظار الاعتماد" value={submitted.length} tone="gold" />
-        <Stat icon={MessageCircle} label="بانتظار المعلومات" value={tasks.filter(t=>t.status==="waiting_info").length} />
-        <Stat icon={CheckCircle2} label="معتمد" value={tasks.filter(t=>t.status==="approved").length} tone="success" />
-        <Stat icon={TrendingUp} label="معاد للتعديل" value={returned.length} tone="gold" />
+        <Stat icon={Sparkles} label="جديد" value={count("new")} tone="info" />
+        <Stat icon={ClipboardList} label="تم الاستلام" value={count("received")} tone="primary" />
+        <Stat icon={Clock} label="قيد التنفيذ" value={count("in_progress")} tone="primary" />
+        <Stat icon={MessageCircle} label="بانتظار المعلومات" value={count("waiting_info")} tone="gold" />
+        <Stat icon={PauseCircle} label="متوقف / عالق" value={count("blocked")} tone="destructive" />
+        <Stat icon={Send} label="مقدم للمراجعة" value={count("submitted")} tone="gold" />
+        <Stat icon={RotateCcw} label="معاد للتعديل" value={count("returned")} tone="destructive" />
+        <Stat icon={CheckCircle2} label="مكتمل ومعتمد" value={count("approved")} tone="success" />
       </div>
+
+      {needsAttention.length > 0 && (
+        <Card className="mt-4 border-gold/40">
+          <CardHeader className="flex-row items-center gap-2"><ShieldAlert className="h-4 w-4 text-gold" /><CardTitle className="text-base">تحتاج متابعة ({needsAttention.length})</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {needsAttention.slice(0, 6).map((t) => (
+              <Link key={t.id} to="/tasks/$taskId" params={{ taskId: t.id }} className="flex items-center justify-between rounded-lg border p-2 hover:bg-muted/50">
+                <div className="min-w-0">
+                  <div className="text-xs text-muted-foreground font-mono">{t.number}</div>
+                  <div className="text-sm font-medium line-clamp-1">{t.title}</div>
+                </div>
+                <StatusBadge status={t.status} />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">اتجاه الإنجاز الأسبوعي</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">التكليفات المعتمدة — آخر 7 أيام</CardTitle></CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trend}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="m" fontSize={12} />
-                <YAxis fontSize={12} />
+                <YAxis fontSize={12} allowDecimals={false} />
                 <Tooltip />
                 <Line type="monotone" dataKey="done" stroke="var(--color-primary)" strokeWidth={2} />
               </LineChart>
@@ -115,43 +148,28 @@ function DashboardPage() {
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle className="text-base">التكليفات حسب القسم</CardTitle></CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byDept}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="name" fontSize={12} />
-                <YAxis fontSize={12} />
-                <Tooltip />
-                <Bar dataKey="value" fill="var(--color-primary)" radius={[6,6,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle className="text-base">تحتاج انتباهك</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            {[...critical, ...overdue, ...blocked].slice(0, 5).map((t) => (
-              <a key={t.id} href={`/tasks/${t.id}`} className="flex items-center justify-between rounded-lg border border-border p-2 hover:bg-muted/50">
-                <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground font-mono">{t.number}</div>
-                  <div className="text-sm font-medium line-clamp-1">{t.title}</div>
-                </div>
-                <StatusBadge status={t.status} />
-              </a>
-            ))}
-            {[...critical, ...overdue, ...blocked].length === 0 && (
-              <div className="text-sm text-muted-foreground py-6 text-center">لا يوجد ما يستدعي انتباهك.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {byDept.length > 0 && (
+        <div className="mt-6">
+          <Card>
+            <CardHeader><CardTitle className="text-base">التكليفات حسب القسم</CardTitle></CardHeader>
+            <CardContent className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byDept}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="name" fontSize={12} />
+                  <YAxis fontSize={12} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="var(--color-primary)" radius={[6,6,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="mt-6">
         <h2 className="mb-3 text-lg font-bold">أحدث التكليفات</h2>
-        <TaskTable tasks={tasks.slice(0, 8)} />
+        <TaskTable tasks={scoped.slice(0, 8)} />
       </div>
     </AppShell>
   );
