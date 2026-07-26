@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -25,14 +26,17 @@ import { AccessDenied } from "@/components/access-denied";
 import { AttachmentPicker } from "@/components/task/AttachmentPicker";
 import { useState } from "react";
 import type { Attachment } from "@/lib/types";
+import { downloadAttachment, attachmentRepo } from "@/lib/attachment-repo";
 
 export const Route = createFileRoute("/tasks/$taskId")({
+  validateSearch: z.object({ commentId: z.string().optional() }).partial(),
   head: () => ({ meta: [{ title: "تفاصيل التكليف — منظومة التكليفات" }] }),
   component: TaskDetail,
 });
 
 function TaskDetail() {
   const { taskId } = Route.useParams();
+  const { commentId: highlightCommentId } = Route.useSearch();
   const qc = useQueryClient();
   const uid = useSession((s) => s.currentUserId);
   const user = getUser(uid)!;
@@ -53,6 +57,8 @@ function TaskDetail() {
 
   const canAck = hasPermission(user, "acknowledge_task") && task.status === "new"
     && (task.deptHeadId === uid || task.assigneeId === uid || task.participantIds.includes(uid));
+  const canRemoveAttachment = hasPermission(user, "remove_attachment");
+  const isLocked = task.archived || task.status === "approved";
 
   const currentTask = task;
   async function ack() { await taskService.acknowledge(currentTask.id, uid); qc.invalidateQueries(); toast.success("تم تأكيد استلام التكليف"); }
@@ -108,6 +114,7 @@ function TaskDetail() {
             </TabsList>
             <TabsContent value="discussion" className="mt-4"><DiscussionThread taskId={task.id} /></TabsContent>
             <TabsContent value="instructions" className="mt-4"><DiscussionThread taskId={task.id} filter="instructions" /></TabsContent>
+            {highlightCommentId && <div className="hidden"><DiscussionThread taskId={task.id} highlightCommentId={highlightCommentId} /></div>}
             <TabsContent value="activity" className="mt-4"><ActivityTimeline taskId={task.id} /></TabsContent>
             <TabsContent value="attachments" className="mt-4">
               <Card>
@@ -127,10 +134,13 @@ function TaskDetail() {
                             <span className="text-xs text-muted-foreground">· {a.size}</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            {a.dataUrl && <a href={a.dataUrl} download={a.name} className="text-xs text-primary hover:underline">تنزيل</a>}
-                            {hasPermission(user, "upload_attachment") && (
+                            <Button size="sm" variant="ghost" className="text-xs text-primary" onClick={() => downloadAttachment(a.id, a.name, a.dataUrl)}>تنزيل</Button>
+                            {canRemoveAttachment && !isLocked && (
                               <Button size="sm" variant="ghost" onClick={() => {
-                                if (confirm("حذف المرفق؟")) removeAttachment(task.id, uid, a.id);
+                                if (confirm("حذف المرفق نهائياً؟ سيُسجل الحذف في سجل التنفيذ.")) {
+                                  attachmentRepo.delete(a.id);
+                                  removeAttachment(task.id, uid, a.id);
+                                }
                               }}>حذف</Button>
                             )}
                           </div>
@@ -138,11 +148,16 @@ function TaskDetail() {
                       ))}
                     </ul>
                   )}
-                  {hasPermission(user, "upload_attachment") && (
+                  {hasPermission(user, "upload_attachment") && !isLocked && (
                     <>
                       <AttachmentPicker onChange={setPendingAtt} />
                       {pendingAtt.length > 0 && <Button onClick={uploadPending}>رفع {pendingAtt.length} مرفق</Button>}
                     </>
+                  )}
+                  {isLocked && (
+                    <div className="text-xs text-muted-foreground text-center py-2">
+                      {task.archived ? "التكليف مؤرشف — لا يمكن تعديل المرفقات." : "تم اعتماد التكليف — لا يمكن تعديل المرفقات."}
+                    </div>
                   )}
                 </CardContent>
               </Card>

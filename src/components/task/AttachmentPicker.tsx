@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Paperclip, X } from "lucide-react";
 import type { Attachment } from "@/lib/types";
 import { toast } from "sonner";
+import { attachmentRepo } from "@/lib/attachment-repo";
 
 const ACCEPT = "image/*,application/pdf,.doc,.docx,.xls,.xlsx,.dwg,.dxf";
 const MAX_MB = 25;
@@ -26,27 +27,36 @@ export function AttachmentPicker({ onChange }: { onChange: (list: Attachment[]) 
   const [items, setItems] = useState<Attachment[]>([]);
   const ref = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function handleFiles(files: FileList | null) {
     if (!files) return;
+    setBusy(true);
     const out: Attachment[] = [];
     for (const f of Array.from(files)) {
       if (f.size > MAX_MB * 1024 * 1024) { toast.error(`${f.name} أكبر من الحد المسموح (${MAX_MB}MB)`); continue; }
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader(); r.onload = () => resolve(r.result as string); r.onerror = reject; r.readAsDataURL(f);
-      });
+      const id = "att_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+      // Big blob into IndexedDB; only a tiny inline preview (images) inside the store.
+      let previewDataUrl: string | undefined;
+      if (f.type.startsWith("image/") && f.size < 512 * 1024) {
+        previewDataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader(); r.onload = () => resolve(r.result as string); r.onerror = reject; r.readAsDataURL(f);
+        });
+      }
+      try { await attachmentRepo.put(id, f); } catch { /* dev fallback below */ }
       out.push({
-        id: "att_" + Math.random().toString(36).slice(2, 9),
-        name: f.name, mime: f.type || "application/octet-stream",
+        id, name: f.name, mime: f.type || "application/octet-stream",
         kind: guessKind(f.type || "", f.name),
-        size: fmtSize(f.size), dataUrl,
+        size: fmtSize(f.size), dataUrl: previewDataUrl,
       });
     }
+    setBusy(false);
     const next = [...items, ...out];
     setItems(next); onChange(next);
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
+    await attachmentRepo.delete(id);
     const next = items.filter((x) => x.id !== id);
     setItems(next); onChange(next);
   }
@@ -63,6 +73,7 @@ export function AttachmentPicker({ onChange }: { onChange: (list: Attachment[]) 
         اسحب الملفات هنا أو
         <Button type="button" variant="link" className="px-1" onClick={() => ref.current?.click()}>اختر ملفات</Button>
         <div className="text-[11px]">PDF · صور · Word · Excel · رسومات — حتى {MAX_MB}MB</div>
+        {busy && <div className="text-[11px] text-primary">جاري رفع الملفات…</div>}
         <input ref={ref} type="file" multiple accept={ACCEPT} className="hidden"
           onChange={(e) => handleFiles(e.target.files)} />
       </div>
