@@ -149,10 +149,12 @@ function logActivity(state: Store, taskId: string, type: ActivityType, actorId: 
 
 function notify(state: Store, userId: string, n: Omit<AppNotification, "id" | "userId" | "createdAt" | "read">) {
   if (!userId) return;
-  // dedup near-duplicates in same second
-  const exists = state.notifications.find(
-    (x) => x.userId === userId && x.type === n.type && x.taskId === n.taskId && x.body === n.body,
-  );
+  // Dedupe by (userId + eventId) primarily, or by content fingerprint fallback.
+  const key = n.eventId ? `${userId}:${n.eventId}` : `${userId}:${n.type}:${n.taskId ?? ""}:${n.commentId ?? ""}:${n.body}`;
+  const exists = state.notifications.some((x) => {
+    const xk = x.eventId ? `${x.userId}:${x.eventId}` : `${x.userId}:${x.type}:${x.taskId ?? ""}:${x.commentId ?? ""}:${x.body}`;
+    return xk === key;
+  });
   if (exists) return;
   state.notifications.unshift({
     id: nid("n"), userId, createdAt: nowIso(), read: false, ...n,
@@ -164,17 +166,27 @@ function notifyMany(state: Store, userIds: (string | undefined)[], actorId: stri
   set.forEach((u) => notify(state, u, n));
 }
 
+/**
+ * Authorized audience for a task — only users who CAN access the task get
+ * notified. Central authorization is mirrored here to avoid a circular
+ * import with authz.ts (which reads the store).
+ */
 function taskAudience(task: Task, state: AppData): string[] {
-  const ids = new Set<string>();
-  ids.add(task.issuedById);
-  if (task.deptHeadId) ids.add(task.deptHeadId);
-  if (task.assigneeId) ids.add(task.assigneeId);
-  task.participantIds.forEach((p) => ids.add(p));
-  // boss/associate always
-  state.users.forEach((u) => { if (u.role === "boss" || u.role === "associate") ids.add(u.id); });
-  // office user tied to this department
+  const perms = state.rolePermissions;
   const dept = state.departments.find((d) => d.id === task.departmentId);
-  if (dept?.officeResponsibleId) ids.add(dept.officeResponsibleId);
+  const ids = new Set<string>();
+  for (const u of state.users) {
+    if (u.active === false || u.archived) continue;
+    if (u.role === "diwan") continue; // Diwan never receives operational notifications
+    const p = perms[u.role] ?? [];
+    if (p.includes("view_all_tasks")) { ids.add(u.id); continue; }
+    if (u.departmentId === task.departmentId && p.includes("view_department_tasks")) { ids.add(u.id); continue; }
+    if (task.issuedById === u.id) { ids.add(u.id); continue; }
+    if (task.deptHeadId === u.id) { ids.add(u.id); continue; }
+    if (task.assigneeId === u.id) { ids.add(u.id); continue; }
+    if (task.participantIds.includes(u.id)) { ids.add(u.id); continue; }
+    if (dept?.officeResponsibleId === u.id) { ids.add(u.id); continue; }
+  }
   return Array.from(ids);
 }
 
