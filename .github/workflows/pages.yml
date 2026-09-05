@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - simplify-daily-workflow
   workflow_dispatch:
 
 permissions:
