@@ -1,329 +1,114 @@
-import type {
-  ActivityEvent,
-  AppNotification,
-  AuditEntry,
-  Comment,
-  Department,
-  Task,
-  User,
-} from "@/lib/types";
+import type { ActivityEvent, Comment, Department, Task, User } from "@/lib/types";
 
-// ---------- Departments ----------
+/**
+ * PUBLIC DEMO DATA ONLY.
+ * Keep every person, task, attachment and department below fictitious and generic.
+ * Never place real personnel, locations, network details or operational data here.
+ */
+
 export const departments: Department[] = [
-  { id: "d1", name: "قسم الدراسات والبنى التحتية", short: "الدراسات", code: "STD", headId: "u4", officeResponsibleId: "u3" },
-  { id: "d2", name: "قسم الشبكات والأنظمة", short: "الشبكات", code: "NET", headId: "u5", officeResponsibleId: "u3" },
-  { id: "d3", name: "قسم الصيانة والدعم الفني", short: "الصيانة", code: "MNT", headId: "u6" },
-  { id: "d4", name: "قسم الاتصالات والتجهيزات", short: "الاتصالات", code: "COM", headId: "u7" },
+  { id: "d1", name: "قسم الدراسات", short: "الدراسات", code: "STD", headId: "u4", officeResponsibleId: "u3" },
+  { id: "d2", name: "قسم الشبكات", short: "الشبكات", code: "NET", headId: "u5" },
+  { id: "d3", name: "قسم الصيانة", short: "الصيانة", code: "MNT", headId: "u6" },
+  { id: "d4", name: "قسم التجهيزات", short: "التجهيزات", code: "EQP", headId: "u7" },
 ];
 
-// ---------- Users ----------
 export const users: User[] = [
-  { id: "u1", name: "العميد محمد الأحمد", role: "boss", username: "boss", rank: "عميد", active: true },
-  { id: "u2", name: "العقيد سامر الحلبي", role: "associate", username: "associate", rank: "عقيد", active: true },
-  { id: "u3", name: "الرائد ياسر الحسن", role: "office", username: "office", rank: "رائد", departmentId: "d1", active: true },
-  { id: "u4", name: "المقدم فادي شاهين", role: "dept_head", departmentId: "d1", username: "head1", rank: "مقدم", active: true },
-  { id: "u5", name: "المقدم عمر الخطيب", role: "dept_head", departmentId: "d2", username: "head2", rank: "مقدم", active: true },
-  { id: "u6", name: "الرائد بشار قاسم", role: "dept_head", departmentId: "d3", username: "head3", rank: "رائد", active: true },
-  { id: "u7", name: "الرائد وسيم درويش", role: "dept_head", departmentId: "d4", username: "head4", rank: "رائد", active: true },
-  { id: "u8", name: "الملازم أول أحمد سليمان", role: "employee", departmentId: "d1", username: "emp1", rank: "ملازم أول", active: true },
-  { id: "u9", name: "الملازم كنان زيدان", role: "employee", departmentId: "d2", username: "emp2", rank: "ملازم", active: true },
-  { id: "u10", name: "الرقيب حسان العلي", role: "employee", departmentId: "d3", username: "emp3", rank: "رقيب", active: true },
-  { id: "u11", name: "الرقيب يزن العمر", role: "employee", departmentId: "d4", username: "emp4", rank: "رقيب", active: true },
-  { id: "u12", name: "الرائد نور الدين خالد", role: "admin", username: "admin", rank: "رائد", active: true },
-  { id: "u13", name: "الملازم رائد الحمصي", role: "diwan", username: "diwan", rank: "ملازم", active: true },
+  { id: "u1", name: "المدير التجريبي", role: "boss", username: "boss", active: true },
+  { id: "u2", name: "معاون المدير التجريبي", role: "associate", username: "associate", active: true },
+  { id: "u3", name: "مسؤول المكتب التجريبي", role: "office", username: "office", departmentId: "d1", active: true },
+  { id: "u4", name: "رئيس قسم الدراسات", role: "dept_head", username: "head1", departmentId: "d1", active: true },
+  { id: "u5", name: "رئيس قسم الشبكات", role: "dept_head", username: "head2", departmentId: "d2", active: true },
+  { id: "u6", name: "رئيس قسم الصيانة", role: "dept_head", username: "head3", departmentId: "d3", active: true },
+  { id: "u7", name: "رئيس قسم التجهيزات", role: "dept_head", username: "head4", departmentId: "d4", active: true },
+  { id: "u8", name: "موظف الدراسات التجريبي", role: "employee", username: "emp1", departmentId: "d1", active: true },
+  { id: "u9", name: "موظف الشبكات التجريبي", role: "employee", username: "emp2", departmentId: "d2", active: true },
+  { id: "u10", name: "موظف الصيانة التجريبي", role: "employee", username: "emp3", departmentId: "d3", active: true },
+  { id: "u11", name: "موظف التجهيزات التجريبي", role: "employee", username: "emp4", departmentId: "d4", active: true },
+  { id: "u12", name: "مدير النظام التجريبي", role: "admin", username: "admin", active: true },
+  { id: "u13", name: "مستخدم الديوان التجريبي", role: "diwan", username: "diwan", active: true },
 ];
 
 const now = new Date();
-const daysFromNow = (n: number, h = 12) => {
+const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3_600_000).toISOString();
+const daysAgo = (days: number, hour = 10) => {
   const d = new Date(now);
-  d.setDate(d.getDate() + n);
-  d.setHours(h, 0, 0, 0);
+  d.setDate(d.getDate() - days);
+  d.setHours(hour, 0, 0, 0);
   return d.toISOString();
 };
 
-// helpers to keep old records — dueAt has been removed from the model
-// so simply drop the field from every seed record below.
+function demoTask(
+  id: string,
+  title: string,
+  departmentId: string,
+  deptHeadId: string,
+  status: Task["status"],
+  priority: Task["priority"],
+  days: number,
+  assigneeId?: string,
+  extra: Partial<Task> = {},
+): Task {
+  const n = Number(id.slice(1));
+  return {
+    id,
+    number: `TK-DEMO-${String(n).padStart(4, "0")}`,
+    title,
+    description: "وصف تجريبي عام لا يحتوي على بيانات تشغيلية أو مواقع أو معلومات حقيقية.",
+    issuedById: n % 4 === 0 ? "u2" : "u1",
+    departmentId,
+    deptHeadId,
+    assigneeId,
+    participantIds: [],
+    issuedAt: daysAgo(days),
+    priority,
+    status,
+    progress: status === "approved" ? 100 : status === "submitted" ? 90 : status === "new" ? 0 : 50,
+    tags: ["تجريبي"],
+    attachments: [],
+    subtasks: [],
+    ...extra,
+  };
+}
 
-// ---------- Tasks ----------
 export const tasks: Task[] = [
-  {
-    id: "t1", number: "TK-2026-0001",
-    title: "دراسة تمديد كابل ألياف ضوئية بين المقر الرئيسي والمركز الفرعي",
-    description: "إعداد دراسة فنية شاملة لتمديد كابل ألياف ضوئية بطول تقريبي 4.2 كم مع مخطط المسار والتكلفة التقديرية.",
-    issuedById: "u1", departmentId: "d1", deptHeadId: "u4", assigneeId: "u8",
-    participantIds: ["u3"],
-    issuedAt: daysFromNow(-5, 9),
-    priority: "important", status: "in_progress", progress: 55,
-    tags: ["دراسات", "بنى تحتية", "ألياف ضوئية"],
-    attachments: [{ id: "a1", name: "مخطط_المسار_v2.pdf", kind: "pdf", size: "1.4MB" }],
-    subtasks: [
-      { id: "s1", title: "مسح المسار ميدانياً", done: true, assigneeId: "u8" },
-      { id: "s2", title: "إعداد التكلفة التقديرية", done: true },
-      { id: "s3", title: "المخطط النهائي", done: false, assigneeId: "u8" },
-      { id: "s4", title: "مذكرة رفع للمدير", done: false },
-    ],
-  },
-  {
-    id: "t2", number: "TK-2026-0002",
-    title: "تركيب منظومة كاميرات مراقبة في المدخل الرئيسي",
-    description: "تركيب 8 كاميرات عالية الدقة مع مسجل NVR وربطها بغرفة العمليات.",
-    issuedById: "u1", departmentId: "d4", deptHeadId: "u7", assigneeId: "u11",
-    participantIds: [],
-    issuedAt: daysFromNow(-2, 10),
-    priority: "urgent", status: "in_progress", progress: 40,
-    tags: ["كاميرات", "تجهيزات"],
-    attachments: [], subtasks: [
-      { id: "s5", title: "تحديد مواقع التركيب", done: true },
-      { id: "s6", title: "سحب الكابلات", done: true },
-      { id: "s7", title: "تركيب وضبط الكاميرات", done: false, assigneeId: "u11" },
-      { id: "s8", title: "الاختبار النهائي", done: false },
-    ],
-    delayReason: "تأخر وصول أحد الكاميرات من المستودع.",
-  },
-  {
-    id: "t3", number: "TK-2026-0003",
-    title: "صيانة عاجلة لعطل في المقسم الرئيسي",
-    description: "انقطاع مؤقت في المقسم الرئيسي يستدعي تدخلاً فورياً وإعادة الخدمة.",
-    issuedById: "u1", departmentId: "d3", deptHeadId: "u6", assigneeId: "u10",
-    participantIds: ["u9"],
-    issuedAt: daysFromNow(0, 8),
-    priority: "critical", status: "in_progress", progress: 70,
-    tags: ["صيانة", "طارئ"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t4", number: "TK-2026-0004",
-    title: "تجهيز غرفة عمليات فرعية في المبنى الجنوبي",
-    description: "تجهيز غرفة عمليات كاملة تشمل الشاشات، أجهزة الاتصال، والأثاث التشغيلي.",
-    issuedById: "u2", departmentId: "d4", deptHeadId: "u7", assigneeId: "u11",
-    participantIds: ["u3", "u4"],
-    issuedAt: daysFromNow(-10, 9),
-    priority: "important", status: "new", progress: 0,
-    tags: ["غرف عمليات", "تجهيزات"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t5", number: "TK-2026-0005",
-    title: "تركيب خزانتين شبكيتين في مركز البيانات",
-    description: "تركيب خزانتين شبكيتين 42U مع تنظيم الكابلات وربط التغذية.",
-    issuedById: "u1", departmentId: "d2", deptHeadId: "u5", assigneeId: "u9",
-    participantIds: [],
-    issuedAt: daysFromNow(-14, 10),
-    priority: "important", status: "submitted", progress: 100,
-    tags: ["خزائن شبكية", "شبكات"],
-    attachments: [{ id: "a2", name: "صور_التركيب.zip", kind: "image", size: "6.1MB" }],
-    subtasks: [], completionSummary: "تم تركيب الخزانتين وتوصيل جميع الأجهزة، بانتظار الاعتماد.",
-  },
-  {
-    id: "t6", number: "TK-2026-0006",
-    title: "تحديث برمجيات مقاسم قسم الشبكات",
-    description: "ترقية نظام تشغيل مقاسم Cisco إلى الإصدار المعتمد.",
-    issuedById: "u2", departmentId: "d2", deptHeadId: "u5", assigneeId: "u9",
-    participantIds: [],
-    issuedAt: daysFromNow(-3, 11),
-    priority: "normal", status: "received", progress: 10,
-    tags: ["شبكات", "تحديث"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t7", number: "TK-2026-0007",
-    title: "دراسة تحسين تغطية الشبكة اللاسلكية الداخلية",
-    description: "قياس ميداني لتغطية الشبكة اللاسلكية في المبنى الرئيسي واقتراح مواقع نقاط وصول إضافية.",
-    issuedById: "u1", departmentId: "d1", deptHeadId: "u4",
-    participantIds: [],
-    issuedAt: daysFromNow(-1, 9),
-    priority: "normal", status: "new", progress: 0,
-    tags: ["دراسات", "شبكات"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t8", number: "TK-2026-0008",
-    title: "إصلاح انقطاع في كابل الاتصالات الأرضي - المحور الشمالي",
-    description: "تحديد نقطة الانقطاع وإصلاحها وإعادة الخدمة في المحور الشمالي.",
-    issuedById: "u3", departmentId: "d3", deptHeadId: "u6", assigneeId: "u10",
-    participantIds: [],
-    issuedAt: daysFromNow(-4, 10),
-    priority: "urgent", status: "blocked", progress: 30,
-    tags: ["كابلات", "صيانة"],
-    attachments: [], subtasks: [],
-    delayReason: "الحاجة لتنسيق مع بلدية المنطقة للوصول لموقع الانقطاع.",
-  },
-  {
-    id: "t9", number: "TK-2026-0009",
-    title: "إعداد تقرير جرد التجهيزات في المستودع",
-    description: "جرد شامل للتجهيزات والأدوات في المستودع الفرعي وإعداد تقرير مفصل.",
-    issuedById: "u2", departmentId: "d4", deptHeadId: "u7", assigneeId: "u11",
-    participantIds: [],
-    issuedAt: daysFromNow(-20, 10),
-    priority: "important", status: "approved", progress: 100,
-    tags: ["تقارير", "تجهيزات"],
-    attachments: [{ id: "a3", name: "تقرير_الجرد_النهائي.pdf", kind: "pdf", size: "820KB" }],
-    subtasks: [], completionSummary: "تم الجرد الكامل وتوثيق النتائج في التقرير المرفق.",
-    approvedById: "u1", approvedAt: daysFromNow(-6, 12),
-  },
-  {
-    id: "t10", number: "TK-2026-0010",
-    title: "دراسة ربط الفروع الخارجية عبر VPN مؤمن",
-    description: "إعداد دراسة فنية لربط الفروع الخارجية بالمقر الرئيسي عبر شبكة VPN مؤمنة.",
-    issuedById: "u1", departmentId: "d1", deptHeadId: "u4", assigneeId: "u8",
-    participantIds: [],
-    issuedAt: daysFromNow(-8, 9),
-    priority: "important", status: "waiting_info", progress: 45,
-    tags: ["دراسات", "شبكات", "أمن"],
-    attachments: [], subtasks: [],
-    
-  },
-  {
-    id: "t11", number: "TK-2026-0011",
-    title: "استبدال بطاريات UPS في غرفة الخوادم",
-    description: "استبدال بطاريات UPS الرئيسي وإجراء اختبارات التحميل.",
-    issuedById: "u3", departmentId: "d3", deptHeadId: "u6", assigneeId: "u10",
-    participantIds: [],
-    issuedAt: daysFromNow(-6, 10),
-    priority: "important", status: "in_progress", progress: 60,
-    tags: ["صيانة", "طاقة"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t12", number: "TK-2026-0012",
-    title: "تركيب منظومة كاميرات في المستودع الجنوبي",
-    description: "تركيب 4 كاميرات مع تسجيل داخلي وربط بغرفة العمليات.",
-    issuedById: "u1", departmentId: "d4", deptHeadId: "u7",
-    participantIds: [],
-    issuedAt: daysFromNow(-1, 10),
-    priority: "normal", status: "received", progress: 5,
-    tags: ["كاميرات"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t13", number: "TK-2026-0013",
-    title: "تدقيق إعدادات الحماية في الجدار الناري",
-    description: "مراجعة قواعد الجدار الناري وتحديثها حسب سياسة الأمن المعتمدة.",
-    issuedById: "u2", departmentId: "d2", deptHeadId: "u5", assigneeId: "u9",
-    participantIds: [],
-    issuedAt: daysFromNow(-9, 10),
-    priority: "urgent", status: "returned", progress: 75,
-    tags: ["شبكات", "أمن"],
-    attachments: [], subtasks: [],
-    delayReason: "أعيد التكليف بسبب نقص في التوثيق.",
-  },
-  {
-    id: "t14", number: "TK-2026-0014",
-    title: "تحديث خطة الطوارئ لغرفة العمليات",
-    description: "تحديث خطة الاستجابة للطوارئ وتوزيع نسخ محدثة على الأقسام.",
-    issuedById: "u1", departmentId: "d1", deptHeadId: "u4",
-    participantIds: ["u2", "u3"],
-    issuedAt: daysFromNow(-12, 9),
-    priority: "important", status: "submitted", progress: 100,
-    tags: ["خطط", "طوارئ"],
-    attachments: [{ id: "a4", name: "الخطة_المحدثة.docx", kind: "word", size: "340KB" }],
-    subtasks: [], completionSummary: "تم تحديث الخطة ومراجعتها داخلياً.",
-  },
-  {
-    id: "t15", number: "TK-2026-0015",
-    title: "توريد وتركيب سويتشات جديدة للمبنى الشرقي",
-    description: "توريد 6 سويتشات جيجابت وتركيبها في الطوابق الثلاثة.",
-    issuedById: "u1", departmentId: "d2", deptHeadId: "u5", assigneeId: "u9",
-    participantIds: [],
-    issuedAt: daysFromNow(-15, 10),
-    priority: "important", status: "in_progress", progress: 65,
-    tags: ["شبكات", "تجهيزات"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t16", number: "TK-2026-0016",
-    title: "إعداد تقرير أداء الشبكة الشهري",
-    description: "تجميع بيانات الأداء الشهرية وإعداد تقرير موجز للإدارة.",
-    issuedById: "u2", departmentId: "d2", deptHeadId: "u5",
-    participantIds: [],
-    issuedAt: daysFromNow(-2, 11),
-    priority: "normal", status: "draft", progress: 0,
-    tags: ["تقارير"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t17", number: "TK-2026-0017",
-    title: "متابعة صيانة أجهزة اللاسلكي في الدوريات",
-    description: "جولة صيانة دورية لأجهزة اتصال الدوريات وتحديث البرمجيات الثابتة.",
-    issuedById: "u3", departmentId: "d3", deptHeadId: "u6", assigneeId: "u10",
-    participantIds: [],
-    issuedAt: daysFromNow(-1, 10),
-    priority: "important", status: "new", progress: 0,
-    tags: ["صيانة", "اتصالات"],
-    attachments: [], subtasks: [],
-  },
-  {
-    id: "t18", number: "TK-2026-0018",
-    title: "أرشفة مستندات المشاريع المنتهية",
-    description: "أرشفة إلكترونية لمستندات المشاريع المنتهية خلال العام السابق.",
-    issuedById: "u2", departmentId: "d1", deptHeadId: "u4", assigneeId: "u8",
-    participantIds: [],
-    issuedAt: daysFromNow(-40, 9),
-    priority: "normal", status: "archived", progress: 100,
-    tags: ["أرشفة"],
-    attachments: [], subtasks: [],
-    approvedById: "u1", approvedAt: daysFromNow(-25, 12),
-  },
+  demoTask("t1", "إعداد دراسة فنية نموذجية", "d1", "u4", "in_progress", "important", 5, "u8"),
+  demoTask("t2", "تركيب تجهيزات اختبار في بيئة تجريبية", "d4", "u7", "in_progress", "urgent", 2, "u11"),
+  demoTask("t3", "معالجة بلاغ صيانة تجريبي", "d3", "u6", "in_progress", "critical", 0, "u10"),
+  demoTask("t4", "تجهيز مساحة عمل نموذجية", "d4", "u7", "new", "important", 3, "u11"),
+  demoTask("t5", "تنظيم تجهيزات شبكة تجريبية", "d2", "u5", "submitted", "important", 8, "u9", { completionSummary: "تم تنفيذ المثال التجريبي وإرساله للاعتماد." }),
+  demoTask("t6", "تحديث إعدادات جهاز شبكة تجريبي", "d2", "u5", "received", "normal", 3, "u9"),
+  demoTask("t7", "إعداد تصور لتحسين خدمة داخلية", "d1", "u4", "new", "normal", 1, "u8"),
+  demoTask("t8", "متابعة عطل تجريبي بانتظار إجراء خارجي", "d3", "u6", "blocked", "urgent", 4, "u10", { delayReason: "سبب تجريبي: بانتظار معلومة إضافية قبل المتابعة." }),
+  demoTask("t9", "إعداد تقرير جرد تجريبي", "d4", "u7", "approved", "important", 12, "u11", { completionSummary: "اكتمل المثال وتم اعتماده.", approvedById: "u1", approvedAt: daysAgo(2) }),
+  demoTask("t10", "دراسة خيار تقني عام", "d1", "u4", "waiting_info", "important", 6, "u8", { delayReason: "بانتظار معلومات تجريبية لاستكمال الدراسة." }),
+  demoTask("t11", "صيانة جهاز طاقة تجريبي", "d3", "u6", "returned", "important", 5, "u10", { delayReason: "أعيد المثال لإضافة توضيح فني." }),
+  demoTask("t12", "تحديث مخطط شبكة نموذجية", "d2", "u5", "in_progress", "normal", 2, "u9"),
+  demoTask("t13", "اختبار إجراء دعم فني", "d3", "u6", "received", "normal", 1, "u10"),
+  demoTask("t14", "تحديث خطة عمل تجريبية", "d4", "u7", "submitted", "important", 7, "u11", { completionSummary: "تم تحديث نموذج الخطة وإرساله للمراجعة." }),
+  demoTask("t15", "إعداد ملخص دراسة قصيرة", "d1", "u4", "approved", "normal", 9, "u8", { completionSummary: "اكتمل المثال بنجاح.", approvedById: "u2", approvedAt: daysAgo(1) }),
+  demoTask("t16", "تجربة إعداد جهاز اتصال", "d4", "u7", "new", "normal", 0, "u11"),
+  demoTask("t17", "توثيق تحديث برمجي تجريبي", "d2", "u5", "in_progress", "important", 4, "u9"),
+  demoTask("t18", "تكليف تجريبي مؤرشف", "d1", "u4", "archived", "normal", 30, "u8", { archived: true, archivedById: "u1", archivedAt: daysAgo(10), archiveReason: "مثال أرشيفي للتجربة." }),
 ];
 
-// ---------- Comments (threaded, incl. formal instructions) ----------
 export const comments: Comment[] = [
-  { id: "c1", taskId: "t1", authorId: "u1", type: "instruction", body: "أرجو التسريع بإنجاز الدراسة قبل نهاية الأسبوع القادم، والتنسيق مع قسم الشبكات لمراجعة المسار.", createdAt: daysFromNow(-4, 10), isFormalInstruction: true, pinned: true, acknowledgedByUserId: "u4", acknowledgedAt: daysFromNow(-4, 11) },
-  { id: "c2", taskId: "t1", authorId: "u4", parentId: "c1", type: "comment", body: "تم استلام التوجيه. سيتم رفع النسخة الأولية يوم الأحد القادم.", createdAt: daysFromNow(-4, 11) },
-  { id: "c3", taskId: "t1", authorId: "u8", type: "update", body: "تم إنجاز المسح الميداني وتوثيق نقاط العبور الحرجة.", createdAt: daysFromNow(-3, 14) },
-  { id: "c4", taskId: "t1", authorId: "u1", parentId: "c3", type: "comment", body: "شكراً. أرجو إرفاق صور توثيقية للنقاط الحرجة.", createdAt: daysFromNow(-3, 15) },
-  { id: "c5", taskId: "t1", authorId: "u4", type: "question", body: "هل يمكن اعتماد كابل من موردٍ محلي بدل الاستيراد لتسريع التنفيذ؟", createdAt: daysFromNow(-2, 10), questionStatus: "waiting" },
-
-  { id: "c6", taskId: "t2", authorId: "u1", type: "instruction", body: "أهمية إنجاز المنظومة خلال 48 ساعة نظراً للحدث القادم.", createdAt: daysFromNow(-2, 10), isFormalInstruction: true, pinned: true },
-  { id: "c7", taskId: "t2", authorId: "u7", parentId: "c6", type: "comment", body: "سيتم العمل ليلاً لضمان التسليم في الوقت المحدد.", createdAt: daysFromNow(-2, 11) },
-  { id: "c8", taskId: "t2", authorId: "u11", type: "update", body: "تم سحب الكابلات وتثبيت أذرع التركيب. تبقى الكاميرات وضبطها.", createdAt: daysFromNow(-1, 18) },
-
-  { id: "c9", taskId: "t3", authorId: "u1", type: "instruction", body: "عاجل جداً — إعادة الخدمة قبل نهاية الدوام.", createdAt: daysFromNow(0, 8), isFormalInstruction: true, pinned: true },
-  { id: "c10", taskId: "t3", authorId: "u6", parentId: "c9", type: "comment", body: "الفريق في الموقع منذ الساعة الثامنة. جارٍ تشخيص العطل.", createdAt: daysFromNow(0, 9) },
-  { id: "c11", taskId: "t3", authorId: "u10", type: "update", body: "تم تحديد سبب العطل: تلف بطاقة تغذية. جارٍ استبدالها.", createdAt: daysFromNow(0, 13) },
-
-  { id: "c12", taskId: "t5", authorId: "u5", type: "update", body: "تم الانتهاء من التركيب. أرفع الملف للاعتماد.", createdAt: daysFromNow(-3, 15) },
-  { id: "c13", taskId: "t5", authorId: "u1", parentId: "c12", type: "revision_request", body: "أرجو إرفاق صور بعد التنظيم النهائي للكابلات قبل الاعتماد.", createdAt: daysFromNow(-2, 10) },
-
-  { id: "c14", taskId: "t8", authorId: "u6", type: "update", body: "لم نستطع الوصول للموقع بعد. بانتظار موافقة البلدية.", createdAt: daysFromNow(-2, 11) },
-  { id: "c15", taskId: "t8", authorId: "u3", parentId: "c14", type: "comment", body: "تم إرسال كتاب رسمي، الرد متوقع خلال 24 ساعة.", createdAt: daysFromNow(-1, 9) },
-
-  { id: "c16", taskId: "t14", authorId: "u4", type: "update", body: "الخطة جاهزة للمراجعة. أرفقت النسخة النهائية.", createdAt: daysFromNow(-4, 14) },
-  { id: "c17", taskId: "t14", authorId: "u2", parentId: "c16", type: "comment", body: "شكراً. سيتم رفعها للمدير للاعتماد.", createdAt: daysFromNow(-4, 15) },
-
-  { id: "c18", taskId: "t10", authorId: "u1", type: "instruction", body: "توجيه رسمي: تسريع إعداد الدراسة الفنية وإحاطة قسم الشبكات بالمخرجات.", createdAt: daysFromNow(-8, 9), isFormalInstruction: true, pinned: true },
-  { id: "c19", taskId: "t10", authorId: "u4", type: "question", body: "هل يمكن الحصول على قائمة المواقع النهائية المطلوب ربطها؟", createdAt: daysFromNow(-6, 10), questionStatus: "waiting" },
+  { id: "c1", taskId: "t1", authorId: "u4", type: "update", body: "تم بدء العمل على المثال التجريبي، وسيتم إضافة النتيجة بعد المراجعة.", createdAt: daysAgo(3), attachments: [], mentions: [] },
+  { id: "c2", taskId: "t1", authorId: "u1", type: "question", body: "هل يحتاج المثال إلى أي معلومات إضافية؟", createdAt: daysAgo(2), questionStatus: "answered", attachments: [], mentions: ["u4"] },
+  { id: "c3", taskId: "t1", parentId: "c2", authorId: "u4", type: "comment", body: "المعلومات الحالية كافية للتجربة.", createdAt: daysAgo(2), attachments: [], mentions: [] },
+  { id: "c4", taskId: "t5", authorId: "u1", type: "instruction", body: "يرجى التأكد من اكتمال توثيق المثال قبل الاعتماد.", createdAt: daysAgo(1), isFormalInstruction: true, pinned: true, acknowledgedByUserId: "u5", acknowledgedAt: hoursAgo(18), attachments: [], mentions: ["u5"] },
+  { id: "c11", taskId: "t3", authorId: "u10", type: "update", body: "تم تحديد سبب العطل التجريبي وبدأت المعالجة.", createdAt: hoursAgo(5), attachments: [], mentions: [] },
 ];
 
-// ---------- Activity ----------
 export const activity: ActivityEvent[] = [
-  { id: "e1", taskId: "t1", type: "task_created", actorId: "u1", createdAt: daysFromNow(-5, 9) },
-  { id: "e2", taskId: "t1", type: "task_assigned", actorId: "u1", createdAt: daysFromNow(-5, 9), detail: "أُسند إلى قسم الدراسات والبنى التحتية" },
-  { id: "e3", taskId: "t1", type: "task_acknowledged", actorId: "u4", createdAt: daysFromNow(-5, 10) },
-  { id: "e4", taskId: "t1", type: "formal_instruction_issued", actorId: "u1", createdAt: daysFromNow(-4, 10) },
-  { id: "e5", taskId: "t1", type: "instruction_acknowledged", actorId: "u4", createdAt: daysFromNow(-4, 11) },
-  { id: "e6", taskId: "t1", type: "progress_updated", actorId: "u8", createdAt: daysFromNow(-3, 14), detail: "٥٥٪" },
-  { id: "e7", taskId: "t2", type: "task_created", actorId: "u1", createdAt: daysFromNow(-2, 10) },
-  { id: "e8", taskId: "t3", type: "task_created", actorId: "u1", createdAt: daysFromNow(0, 8) },
-  { id: "e9", taskId: "t3", type: "task_acknowledged", actorId: "u6", createdAt: daysFromNow(0, 8) },
-  { id: "e10", taskId: "t5", type: "task_submitted", actorId: "u5", createdAt: daysFromNow(-3, 15) },
-  { id: "e11", taskId: "t9", type: "task_approved", actorId: "u1", createdAt: daysFromNow(-6, 12) },
-  { id: "e12", taskId: "t13", type: "task_returned", actorId: "u1", createdAt: daysFromNow(-1, 12), detail: "بحاجة لمزيد من التوثيق" },
+  { id: "e1", taskId: "t1", type: "task_created", actorId: "u1", createdAt: daysAgo(5), detail: "تم إنشاء تكليف تجريبي." },
+  { id: "e2", taskId: "t1", type: "task_acknowledged", actorId: "u4", createdAt: daysAgo(4), detail: "تم تأكيد استلام المثال." },
+  { id: "e3", taskId: "t1", type: "update_posted", actorId: "u4", createdAt: daysAgo(3), detail: "تم نشر تحديث تجريبي." },
+  { id: "e4", taskId: "t5", type: "task_submitted", actorId: "u5", createdAt: daysAgo(1), detail: "تم إرسال المثال للاعتماد." },
+  { id: "e5", taskId: "t9", type: "task_approved", actorId: "u1", createdAt: daysAgo(2), detail: "تم اعتماد وإنهاء المثال." },
+  { id: "e6", taskId: "t3", type: "update_posted", actorId: "u10", createdAt: hoursAgo(5), detail: "تم نشر تحديث صيانة تجريبي." },
+  { id: "e7", taskId: "t11", type: "task_returned", actorId: "u2", createdAt: daysAgo(1), detail: "أعيد المثال لإضافة توضيح." },
+  { id: "e8", taskId: "t14", type: "task_submitted", actorId: "u7", createdAt: hoursAgo(6), detail: "تم إرسال خطة تجريبية للمراجعة." },
+  { id: "e9", taskId: "t15", type: "task_approved", actorId: "u2", createdAt: daysAgo(1), detail: "تم اعتماد المثال." },
+  { id: "e10", taskId: "t18", type: "task_archived", actorId: "u1", createdAt: daysAgo(10), detail: "تمت أرشفة المثال التجريبي." },
 ];
-
-// ---------- Notifications ----------
-export const notifications: AppNotification[] = [
-  { id: "n1", userId: "u1", type: "submitted", title: "تكليف بانتظار الاعتماد", body: "قسم الشبكات قدم التكليف TK-2026-0005 للمراجعة.", taskId: "t5", createdAt: daysFromNow(-3, 15), read: false },
-  { id: "n2", userId: "u1", type: "submitted", title: "تكليف بانتظار الاعتماد", body: "قسم الدراسات قدم التكليف TK-2026-0014.", taskId: "t14", createdAt: daysFromNow(-4, 14), read: false },
-  { id: "n3", userId: "u1", type: "submitted", title: "تكليف متأخر", body: "التكليف TK-2026-0002 تجاوز موعد التسليم.", taskId: "t2", createdAt: daysFromNow(0, 8), read: false },
-  { id: "n4", userId: "u4", type: "formal_instruction", title: "توجيه رسمي جديد", body: "توجيه بخصوص التكليف TK-2026-0010 يتطلب استلامكم.", taskId: "t10", createdAt: daysFromNow(-8, 9), read: false },
-  { id: "n5", userId: "u4", type: "reply", title: "رد جديد على تعليقكم", body: "المدير رد على تعليقكم في التكليف TK-2026-0001.", taskId: "t1", createdAt: daysFromNow(-3, 15), read: true },
-  { id: "n6", userId: "u5", type: "assignment", title: "تكليف جديد", body: "تم إسناد التكليف TK-2026-0006 لقسمكم.", taskId: "t6", createdAt: daysFromNow(-3, 11), read: false },
-  { id: "n7", userId: "u5", type: "returned", title: "تكليف معاد للتعديل", body: "التكليف TK-2026-0013 أعيد بحاجة لمزيد من التوثيق.", taskId: "t13", createdAt: daysFromNow(-1, 12), read: false },
-  { id: "n8", userId: "u2", type: "assignment", title: "اقتراب موعد تسليم", body: "التكليف TK-2026-0011 يستحق خلال يومين.", taskId: "t11", createdAt: daysFromNow(0, 9), read: false },
-];
-
-// ---------- Audit ----------
-export const audit: AuditEntry[] = activity.map((e) => ({
-  id: "log_" + e.id, actorId: e.actorId, taskId: e.taskId, action: e.type, detail: e.detail, createdAt: e.createdAt,
-}));
