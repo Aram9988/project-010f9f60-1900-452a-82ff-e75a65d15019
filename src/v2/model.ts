@@ -1,0 +1,184 @@
+export type Role = "boss" | "head" | "employee";
+export type View = "overview" | "tasks" | "reports";
+export type TaskStatus = "new" | "active" | "waiting" | "review" | "returned" | "done";
+export type Priority = "normal" | "important" | "urgent";
+
+export type DemoUser = {
+  id: string;
+  name: string;
+  title: string;
+  role: Role;
+  departmentId?: string;
+};
+
+export type UpdateEntry = {
+  id: string;
+  authorId: string;
+  text: string;
+  at: string;
+  status?: TaskStatus;
+  attachment?: string;
+  system?: boolean;
+};
+
+export type Assignment = {
+  id: string;
+  number: string;
+  title: string;
+  details: string;
+  departmentId: string;
+  priority: Priority;
+  status: TaskStatus;
+  createdAt: string;
+  updatedAt: string;
+  issuedById: string;
+  ownerId?: string;
+  updates: UpdateEntry[];
+};
+
+export type Notice = {
+  id: string;
+  userId: string;
+  taskId?: string;
+  text: string;
+  at: string;
+  read: boolean;
+};
+
+export type AppState = {
+  tasks: Assignment[];
+  notices: Notice[];
+  currentUserId: string;
+};
+
+export const departments = [
+  { id: "studies", name: "قسم الدراسات", short: "الدراسات" },
+  { id: "networks", name: "قسم الشبكات", short: "الشبكات" },
+  { id: "support", name: "قسم الدعم الفني", short: "الدعم الفني" },
+  { id: "systems", name: "قسم الأنظمة", short: "الأنظمة" },
+];
+
+export const users: DemoUser[] = [
+  { id: "boss", name: "المدير التجريبي", title: "مدير الفرع", role: "boss" },
+  { id: "head-studies", name: "رئيس قسم الدراسات", title: "رئيس قسم", role: "head", departmentId: "studies" },
+  { id: "head-networks", name: "رئيس قسم الشبكات", title: "رئيس قسم", role: "head", departmentId: "networks" },
+  { id: "head-support", name: "رئيس قسم الدعم الفني", title: "رئيس قسم", role: "head", departmentId: "support" },
+  { id: "head-systems", name: "رئيس قسم الأنظمة", title: "رئيس قسم", role: "head", departmentId: "systems" },
+  { id: "employee-studies", name: "مهندس الدراسات", title: "عضو فريق", role: "employee", departmentId: "studies" },
+];
+
+const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
+
+export function makeSeedState(): AppState {
+  const tasks: Assignment[] = [
+    {
+      id: "a-1",
+      number: "TK-0261",
+      title: "مراجعة مخطط شبكة لمبنى إداري",
+      details: "مراجعة توزيع نقاط الشبكة ومسارات الربط ورفع الملاحظات الفنية النهائية.",
+      departmentId: "studies",
+      priority: "important",
+      status: "active",
+      createdAt: ago(31),
+      updatedAt: ago(6),
+      issuedById: "boss",
+      ownerId: "head-studies",
+      updates: [
+        { id: "u-1", authorId: "boss", text: "تم إصدار التكليف وإحالته إلى قسم الدراسات.", at: ago(31), system: true },
+        { id: "u-2", authorId: "head-studies", text: "تم الاستلام وبدأت مراجعة المخططات الحالية.", at: ago(27), status: "active" },
+        { id: "u-3", authorId: "employee-studies", text: "تم تدقيق نقاط الربط الرئيسية، والعمل جارٍ على الملاحظات النهائية.", at: ago(6) },
+      ],
+    },
+    {
+      id: "a-2",
+      number: "TK-0262",
+      title: "إعداد تصور تغطية كاميرات لموقع تجريبي",
+      details: "اقتراح مواقع الكاميرات ونوع التغطية المطلوبة وإعداد تصور أولي قابل للمراجعة.",
+      departmentId: "studies",
+      priority: "urgent",
+      status: "review",
+      createdAt: ago(24),
+      updatedAt: ago(2),
+      issuedById: "boss",
+      ownerId: "head-studies",
+      updates: [
+        { id: "u-4", authorId: "boss", text: "تم إصدار التكليف.", at: ago(24), system: true },
+        { id: "u-5", authorId: "head-studies", text: "اكتمل التصور الأولي وأصبح جاهزاً للمراجعة.", at: ago(2), status: "review", attachment: "camera-layout-demo.pdf" },
+      ],
+    },
+    {
+      id: "a-3",
+      number: "TK-0263",
+      title: "اختبار مسار ربط احتياطي",
+      details: "تنفيذ اختبار وظيفي لمسار الربط الاحتياطي وتوثيق النتيجة والملاحظات.",
+      departmentId: "networks",
+      priority: "normal",
+      status: "waiting",
+      createdAt: ago(18),
+      updatedAt: ago(4),
+      issuedById: "boss",
+      ownerId: "head-networks",
+      updates: [
+        { id: "u-6", authorId: "boss", text: "تم إصدار التكليف إلى قسم الشبكات.", at: ago(18), system: true },
+        { id: "u-7", authorId: "head-networks", text: "بانتظار توفر نافذة الاختبار المناسبة قبل تنفيذ التبديل.", at: ago(4), status: "waiting" },
+      ],
+    },
+    {
+      id: "a-4",
+      number: "TK-0264",
+      title: "معالجة ملاحظة صيانة في غرفة مراقبة",
+      details: "فحص المشكلة وتوثيق سببها والإجراء التصحيحي المتخذ.",
+      departmentId: "support",
+      priority: "important",
+      status: "new",
+      createdAt: ago(3),
+      updatedAt: ago(3),
+      issuedById: "boss",
+      ownerId: "head-support",
+      updates: [{ id: "u-8", authorId: "boss", text: "تم إصدار التكليف إلى قسم الدعم الفني.", at: ago(3), system: true }],
+    },
+    {
+      id: "a-5",
+      number: "TK-0260",
+      title: "تحديث توثيق الأجهزة في غرفة الخوادم التجريبية",
+      details: "تحديث السجل الفني وحالة الأجهزة وتوثيق التغييرات المنفذة.",
+      departmentId: "systems",
+      priority: "normal",
+      status: "done",
+      createdAt: ago(70),
+      updatedAt: ago(28),
+      issuedById: "boss",
+      ownerId: "head-systems",
+      updates: [
+        { id: "u-9", authorId: "head-systems", text: "تم استكمال التحديث وإرسال السجل للمراجعة.", at: ago(30), status: "review" },
+        { id: "u-10", authorId: "boss", text: "تم الاعتماد وإنهاء التكليف.", at: ago(28), status: "done", system: true },
+      ],
+    },
+  ];
+
+  return {
+    tasks,
+    currentUserId: "boss",
+    notices: [
+      { id: "n-1", userId: "boss", taskId: "a-2", text: "تكليف جاهز للمراجعة: إعداد تصور تغطية كاميرات", at: ago(2), read: false },
+      { id: "n-2", userId: "head-studies", taskId: "a-1", text: "يوجد تحديث جديد على التكليف TK-0261", at: ago(6), read: false },
+    ],
+  };
+}
+
+export const statusMeta: Record<TaskStatus, { label: string; tone: string }> = {
+  new: { label: "جديد", tone: "blue" },
+  active: { label: "قيد التنفيذ", tone: "indigo" },
+  waiting: { label: "بانتظار إجراء", tone: "amber" },
+  review: { label: "بانتظار الاعتماد", tone: "violet" },
+  returned: { label: "معاد للتعديل", tone: "rose" },
+  done: { label: "مكتمل", tone: "emerald" },
+};
+
+export const priorityMeta: Record<Priority, string> = {
+  normal: "عادي",
+  important: "مهم",
+  urgent: "عاجل",
+};
+
+export const STORAGE_KEY = "command-center-v2-demo";
