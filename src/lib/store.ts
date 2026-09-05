@@ -318,28 +318,32 @@ function notifyMany(state: Store, userIds: (string | undefined)[], actorId: stri
 }
 
 /**
- * Authorized audience for a task — only users who CAN access the task get
- * notified. Central authorization is mirrored here to avoid a circular
- * import with authz.ts (which reads the store).
+ * Authorized audience for a task — ONLY users who can access the task get
+ * notified. This mirrors canAccessTask() exactly (mirrored here to avoid a
+ * circular import with authz.ts). Being the issuer, head, assignee,
+ * participant or office responsible must NEVER widen the audience: that
+ * would leak another department's task through a notification.
  */
 function taskAudience(task: Task, state: AppData): string[] {
   const perms = state.rolePermissions;
-  const dept = state.departments.find((d) => d.id === task.departmentId);
   const ids = new Set<string>();
   for (const u of state.users) {
     if (u.active === false || u.archived) continue;
     if (u.role === "diwan") continue; // Diwan never receives operational notifications
     const p = perms[u.role] ?? [];
+    if (task.archived && !p.includes("view_archived_tasks")) continue;
     if (p.includes("view_all_tasks")) { ids.add(u.id); continue; }
-    if (u.departmentId === task.departmentId && p.includes("view_department_tasks")) { ids.add(u.id); continue; }
-    if (task.issuedById === u.id) { ids.add(u.id); continue; }
-    if (task.deptHeadId === u.id) { ids.add(u.id); continue; }
-    if (task.assigneeId === u.id) { ids.add(u.id); continue; }
-    if (task.participantIds.includes(u.id)) { ids.add(u.id); continue; }
-    if (dept?.officeResponsibleId === u.id) { ids.add(u.id); continue; }
+    if (p.includes("view_department_tasks") && u.departmentId && u.departmentId === task.departmentId) ids.add(u.id);
   }
   return Array.from(ids);
 }
+
+/** Restrict an explicit recipient list to users authorized for the task. */
+function scopedRecipients(task: Task, state: AppData, ids: (string | undefined)[]): string[] {
+  const allowed = new Set(taskAudience(task, state));
+  return ids.filter((i): i is string => !!i && allowed.has(i));
+}
+
 
 export const useAppStore = create<Store>()(
   persist(
