@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BriefcaseBusiness, ChevronDown, ChevronUp, CircleDot, Focus, ListTodo, Maximize2, Minimize2, Minus, Network, PhoneCall, Plus, Radio, UserRound, UsersRound } from "lucide-react";
 import type { Assignment } from "../v2/model";
 import { descendants, roleOf, type OrgState, type OrgUser } from "./orgModel";
@@ -54,36 +54,6 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
     return () => document.removeEventListener("fullscreenchange", handleFullscreen);
   }, []);
 
-  if (!current) return null;
-
-  const currentRole = roleOf(state, current);
-  const branchHead = state.users.find((u) => roleOf(state, u)?.key === "branch_head");
-  const root = currentRole?.key === "branch_head" ? branchHead ?? current : current;
-  const visibleUsers = useMemo(() => [root, ...descendants(state, root.id)].filter((u) => u.active), [state, root]);
-  const visibleIds = new Set(visibleUsers.map((u) => u.id));
-  const workingCount = visibleUsers.filter((u) => items.some((i) => (i.assigneeId ?? i.ownerId) === u.id && i.status !== "done")).length;
-  const activeCalls = callRequests.filter((r) => r.active);
-
-  const allowedCallTarget = (() => {
-    if (currentRole?.key === "department_head") return branchHead?.id;
-    if (currentRole?.key === "office_responsible") {
-      const manager = state.users.find((u) => u.id === current.managerId);
-      return roleOf(state, manager)?.key === "department_head" ? manager?.id : undefined;
-    }
-    return undefined;
-  })();
-
-  function requestCall() {
-    if (!allowedCallTarget) return;
-    const already = activeCalls.some((r) => r.fromUserId === current.id && r.toUserId === allowedCallTarget);
-    if (already) return;
-    setCallRequests((prev) => [{ id: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, fromUserId: current.id, toUserId: allowedCallTarget, createdAt: new Date().toISOString(), active: true }, ...prev]);
-  }
-
-  function resolveCall(id: string) {
-    setCallRequests((prev) => prev.map((r) => r.id === id ? { ...r, active: false } : r));
-  }
-
   function fitTopology() {
     const viewport = viewportRef.current;
     const content = contentRef.current;
@@ -103,6 +73,37 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
       window.removeEventListener("resize", fitTopology);
     };
   }, [isFullscreen, state, items]);
+
+  if (!current) return null;
+  const currentUser = current;
+
+  const currentRole = roleOf(state, currentUser);
+  const branchHead = state.users.find((u) => roleOf(state, u)?.key === "branch_head");
+  const root = currentRole?.key === "branch_head" ? branchHead ?? currentUser : currentUser;
+  const visibleUsers = [root, ...descendants(state, root.id)].filter((u) => u.active);
+  const visibleIds = new Set(visibleUsers.map((u) => u.id));
+  const workingCount = visibleUsers.filter((u) => items.some((i) => (i.assigneeId ?? i.ownerId) === u.id && i.status !== "done")).length;
+  const activeCalls = callRequests.filter((r) => r.active);
+
+  const allowedCallTarget = (() => {
+    if (currentRole?.key === "department_head") return branchHead?.id;
+    if (currentRole?.key === "office_responsible") {
+      const manager = state.users.find((u) => u.id === currentUser.managerId);
+      return roleOf(state, manager)?.key === "department_head" ? manager?.id : undefined;
+    }
+    return undefined;
+  })();
+
+  function requestCall() {
+    if (!allowedCallTarget) return;
+    const already = activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget);
+    if (already) return;
+    setCallRequests((prev) => [{ id: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, fromUserId: currentUser.id, toUserId: allowedCallTarget, createdAt: new Date().toISOString(), active: true }, ...prev]);
+  }
+
+  function resolveCall(id: string) {
+    setCallRequests((prev) => prev.map((r) => r.id === id ? { ...r, active: false } : r));
+  }
 
   function setZoomSafe(next: number) {
     setZoom(Math.min(1.7, Math.max(0.28, Number(next.toFixed(2)))));
@@ -154,7 +155,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
           <p className="mt-1 text-xs leading-6 text-slate-500">{currentRole?.key === "branch_head" ? "الهيكل الكامل للفرع مع حالة كل مستخدم والعمل المسند إليه وطلبات الاتصال مباشرة." : "هيكل فريقك فقط مع حالة العمل الحالية لكل فرد."}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {allowedCallTarget && <button type="button" onClick={requestCall} disabled={activeCalls.some((r) => r.fromUserId === current.id && r.toUserId === allowedCallTarget)} className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2 text-[10px] font-black text-amber-200 disabled:opacity-45"><PhoneCall size={14} />{activeCalls.some((r) => r.fromUserId === current.id && r.toUserId === allowedCallTarget) ? "تم إرسال طلب الاتصال" : "طلب اتصال من المسؤول"}</button>}
+          {allowedCallTarget && <button type="button" onClick={requestCall} disabled={activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget)} className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2 text-[10px] font-black text-amber-200 disabled:opacity-45"><PhoneCall size={14} />{activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget) ? "تم إرسال طلب الاتصال" : "طلب اتصال من المسؤول"}</button>}
           <LiveStat label="الأفراد" value={visibleUsers.length} icon={<UsersRound size={14} />} />
           <LiveStat label="على مهمة" value={workingCount} icon={<Radio size={14} />} active />
           {activeCalls.length > 0 && <LiveStat label="طلبات اتصال" value={activeCalls.length} icon={<PhoneCall size={14} />} warning />}
@@ -192,11 +193,11 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
               <div className="flex flex-col items-center">
                 <BranchRoot name={state.branchName} active={workingCount > 0} />
                 <ConnectorVertical active={workingCount > 0} />
-                <OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={current.id} onResolveCall={resolveCall} />
+                <OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} />
               </div>
             ) : (
               <div className="flex justify-center">
-                <OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={current.id} onResolveCall={resolveCall} />
+                <OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} />
               </div>
             )}
           </div>
