@@ -40,6 +40,7 @@ export type OrgUser = {
   username: string;
   password: string;
   roleId: string;
+  avatarDataUrl?: string;
   title?: string;
   departmentId?: string;
   officeId?: string;
