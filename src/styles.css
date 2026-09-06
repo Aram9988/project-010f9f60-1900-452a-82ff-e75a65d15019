@@ -113,6 +113,30 @@
     box-shadow: 0 0 0 4px rgba(34,211,238,.055), 0 0 24px rgba(34,211,238,.04);
   }
   .tech-field::placeholder { color: #475569; }
+  .nav-btn {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: .75rem;
+    border: 1px solid transparent;
+    border-radius: 1rem;
+    padding: .75rem 1rem;
+    color: #94a3b8;
+    font-size: .875rem;
+    font-weight: 700;
+    text-align: right;
+    transition: 160ms ease;
+  }
+  .nav-btn:hover {
+    border-color: rgba(255,255,255,.08);
+    background: rgba(255,255,255,.04);
+    color: #f8fafc;
+  }
+  .nav-btn-active {
+    border-color: rgba(103,232,249,.24);
+    background: rgba(103,232,249,.08);
+    color: #a5f3fc;
+  }
   .report-action {
     display: inline-flex;
     height: 40px;
