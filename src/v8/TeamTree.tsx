@@ -263,8 +263,8 @@ function PersonNode({ user, roleName, subtitle, activeItems, onOpenItem, isRoot,
     <div className={`topology-person-node relative z-10 w-[250px] rounded-2xl border p-4 shadow-xl backdrop-blur ${busy ? "topology-worker-active" : ""} ${hasCall ? "topology-call-alert border-amber-300/50 bg-amber-300/[0.07]" : isRoot ? "border-cyan-300/22 bg-cyan-300/[0.055]" : busy ? "border-emerald-300/18 bg-emerald-300/[0.035]" : "border-white/8 bg-[#0a1523]/95"}`}>
       {hasCall && <div className="absolute -top-2 left-3 flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-[#251a08] px-2.5 py-1 text-[8px] font-black text-amber-200 shadow-lg"><PhoneCall size={10} />طلب اتصال</div>}
       <div className="flex items-start gap-3">
-        <div className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${hasCall ? "border-amber-300/30 bg-amber-300/[0.08] text-amber-200" : busy ? "border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-300" : "border-white/8 bg-black/15 text-cyan-300"}`}>
-          <UserRound size={17} />
+        <div className={`relative grid h-12 w-12 shrink-0 place-items-center overflow-visible rounded-2xl border ${hasCall ? "border-amber-300/30 bg-amber-300/[0.08] text-amber-200" : busy ? "border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-300" : "border-white/8 bg-black/15 text-cyan-300"}`}>
+          {user.avatarDataUrl ? <img src={user.avatarDataUrl} alt={user.name} className="h-full w-full rounded-[15px] object-cover" /> : <UserRound size={19} />}
           <span className={`absolute -left-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[#0a1523] ${busy ? "topology-worker-dot bg-emerald-400" : "bg-slate-700"}`} />
         </div>
         <div className="min-w-0 flex-1">
