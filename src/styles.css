@@ -31,90 +31,106 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
 }
 
 :root {
-  --radius: 0.9rem;
-  --background: oklch(0.975 0.005 260);
-  --foreground: oklch(0.18 0.025 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.025 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.025 260);
-  --primary: oklch(0.49 0.22 275);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.95 0.012 260);
-  --secondary-foreground: oklch(0.27 0.03 260);
-  --muted: oklch(0.955 0.008 260);
-  --muted-foreground: oklch(0.48 0.025 260);
-  --accent: oklch(0.94 0.025 270);
-  --accent-foreground: oklch(0.35 0.12 275);
-  --destructive: oklch(0.58 0.22 27);
+  --radius: 1rem;
+  --background: oklch(0.12 0.025 255);
+  --foreground: oklch(0.96 0.01 250);
+  --card: oklch(0.16 0.026 255);
+  --card-foreground: oklch(0.96 0.01 250);
+  --popover: oklch(0.16 0.026 255);
+  --popover-foreground: oklch(0.96 0.01 250);
+  --primary: oklch(0.79 0.12 205);
+  --primary-foreground: oklch(0.12 0.03 255);
+  --secondary: oklch(0.22 0.025 255);
+  --secondary-foreground: oklch(0.93 0.01 250);
+  --muted: oklch(0.21 0.02 255);
+  --muted-foreground: oklch(0.63 0.025 250);
+  --accent: oklch(0.28 0.06 245);
+  --accent-foreground: oklch(0.95 0.01 250);
+  --destructive: oklch(0.64 0.2 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.9 0.01 260);
-  --input: oklch(0.9 0.01 260);
-  --ring: oklch(0.58 0.18 275);
-  --sidebar: oklch(0.98 0.004 260);
-  --sidebar-foreground: oklch(0.2 0.025 260);
-}
-
-.dark {
-  --background: oklch(0.14 0.02 260);
-  --foreground: oklch(0.96 0.006 260);
-  --card: oklch(0.19 0.025 260);
-  --card-foreground: oklch(0.96 0.006 260);
-  --popover: oklch(0.19 0.025 260);
-  --popover-foreground: oklch(0.96 0.006 260);
-  --primary: oklch(0.72 0.16 275);
-  --primary-foreground: oklch(0.15 0.02 260);
-  --secondary: oklch(0.24 0.025 260);
-  --secondary-foreground: oklch(0.95 0.006 260);
-  --muted: oklch(0.23 0.02 260);
-  --muted-foreground: oklch(0.75 0.02 260);
-  --accent: oklch(0.28 0.04 275);
-  --accent-foreground: oklch(0.95 0.006 260);
-  --destructive: oklch(0.67 0.2 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(1 0 0 / 13%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.72 0.16 275);
-  --sidebar: oklch(0.17 0.02 260);
-  --sidebar-foreground: oklch(0.96 0.006 260);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.79 0.12 205);
 }
 
 @layer base {
   * { border-color: var(--color-border); }
-  html { min-height: 100%; }
+  html { min-height: 100%; background: #06101d; }
   html[dir="rtl"] { text-align: right; }
   body {
     min-height: 100vh;
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    margin: 0;
+    background: #06101d;
+    color: #eef5fb;
     font-family: var(--font-sans);
     font-feature-settings: "kern", "liga";
-    margin: 0;
+    -webkit-font-smoothing: antialiased;
   }
   button, input, textarea, select { font: inherit; }
   button { cursor: pointer; }
+  ::selection { background: rgba(103, 232, 249, .25); color: white; }
 }
 
 @layer components {
-  .field {
+  .tech-shell {
+    background:
+      radial-gradient(circle at 8% 0%, rgba(56, 189, 248, .08), transparent 32rem),
+      radial-gradient(circle at 90% 18%, rgba(99, 102, 241, .09), transparent 34rem),
+      linear-gradient(180deg, #07111e 0%, #08121f 48%, #060e19 100%);
+  }
+  .tech-grid {
+    background-image:
+      linear-gradient(rgba(148, 163, 184, .028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, .028) 1px, transparent 1px);
+    background-size: 34px 34px;
+    mask-image: linear-gradient(to bottom, black, rgba(0,0,0,.55) 65%, transparent);
+  }
+  .tech-panel {
+    border: 1px solid rgba(255,255,255,.085);
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,.047), rgba(255,255,255,.025));
+    box-shadow: 0 22px 60px rgba(1, 8, 20, .28), inset 0 1px 0 rgba(255,255,255,.025);
+    backdrop-filter: blur(12px);
+  }
+  .tech-field {
     width: 100%;
-    border-radius: 1rem;
-    border: 1px solid rgb(226 232 240);
-    background: rgb(248 250 252);
-    padding: 0.8rem 0.9rem;
-    font-size: 0.875rem;
+    min-height: 44px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.09);
+    background: rgba(1, 8, 20, .3);
+    color: #e6edf5;
+    padding: .72rem .85rem;
+    font-size: .75rem;
     outline: none;
     transition: 160ms ease;
+    color-scheme: dark;
   }
-  .field:focus {
-    border-color: rgb(165 180 252);
-    background: white;
-    box-shadow: 0 0 0 4px rgb(224 231 255 / 0.75);
+  .tech-field:focus {
+    border-color: rgba(103,232,249,.38);
+    box-shadow: 0 0 0 4px rgba(34,211,238,.055), 0 0 24px rgba(34,211,238,.04);
+  }
+  .tech-field::placeholder { color: #475569; }
+  .report-action {
+    display: inline-flex;
+    height: 40px;
+    align-items: center;
+    gap: 7px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.1);
+    background: rgba(255,255,255,.045);
+    padding: 0 .9rem;
+    color: #cbd5e1;
+    font-size: 10px;
+    font-weight: 800;
+    transition: 160ms ease;
+  }
+  .report-action:hover {
+    border-color: rgba(103,232,249,.25);
+    background: rgba(103,232,249,.07);
+    color: #a5f3fc;
   }
 }
 
@@ -123,7 +139,25 @@
 }
 
 @media print {
-  header, aside, nav, .no-print { display: none !important; }
-  main { padding: 0 !important; }
-  body { background: white !important; color: black !important; }
+  @page { size: A4 landscape; margin: 12mm; }
+  html, body { background: white !important; color: #111827 !important; }
+  body * { visibility: hidden !important; }
+  #print-report, #print-report * { visibility: visible !important; }
+  #print-report {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: #111827 !important;
+  }
+  #print-report .text-slate-500,
+  #print-report .text-slate-600,
+  #print-report .text-slate-400 { color: #475569 !important; }
+  #print-report .text-white,
+  #print-report .text-slate-300 { color: #111827 !important; }
+  #print-report [class*="bg-"] { background: white !important; }
+  #print-report [class*="border-"] { border-color: #dbe4ee !important; }
+  .no-print { display: none !important; }
 }
