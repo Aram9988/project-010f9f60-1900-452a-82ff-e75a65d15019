@@ -30,16 +30,11 @@ export default function LoginScreen({ onLogin }: { onLogin: (username: string, p
         <section className="hidden min-h-[620px] border-l border-white/8 p-10 lg:flex lg:flex-col lg:justify-between">
           <Brand />
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/7 px-3 py-1 text-[9px] font-black tracking-[.18em] text-cyan-300">
-              <Activity size={12} /> SECURE OPERATIONS ACCESS
-            </div>
-            <h1 className="mt-5 max-w-lg text-4xl font-black leading-[1.35]">مركز موحد لإصدار التكليفات ومتابعة التنفيذ والاعتماد</h1>
-            <p className="mt-5 max-w-xl text-sm leading-8 text-slate-400">واجهة تشغيلية عربية: الإدارة تصدر التكليف، القسم ينفذ ويحدّث، والإدارة تراجع وتعتمد وتنهي.</p>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/7 px-3 py-1 text-[9px] font-black tracking-[.18em] text-cyan-300"><Activity size={12} /> SECURE OPERATIONS ACCESS</div>
+            <h1 className="mt-5 max-w-lg text-4xl font-black leading-[1.35]">مركز موحد لإدارة المشاريع والمهام ومتابعة التنفيذ</h1>
+            <p className="mt-5 max-w-xl text-sm leading-8 text-slate-400">المشاريع والمهام تعمل بنفس الأسلوب: إنشاء، استلام، متابعة، تحديث، إرسال للاعتماد ثم اعتماد وإنهاء.</p>
           </div>
-          <div className="flex items-center gap-3 text-[10px] font-bold text-slate-600">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.8)]" />
-            DEMO ENVIRONMENT · LOCAL DATA ONLY
-          </div>
+          <div className="flex items-center gap-3 text-[10px] font-bold text-slate-600"><span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.8)]" />DEMO ENVIRONMENT · LOCAL DATA ONLY</div>
         </section>
 
         <section className="flex min-h-[620px] items-center p-6 sm:p-10">
@@ -47,7 +42,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (username: string, p
             <div className="mb-8 lg:hidden"><Brand /></div>
             <div className="grid h-14 w-14 place-items-center rounded-2xl border border-cyan-300/20 bg-cyan-300/8 text-cyan-300"><LockKeyhole size={24} /></div>
             <h2 className="mt-6 text-2xl font-black">تسجيل الدخول</h2>
-            <p className="mt-2 text-xs leading-6 text-slate-500">أدخل بيانات حسابك للوصول إلى مركز التكليفات.</p>
+            <p className="mt-2 text-xs leading-6 text-slate-500">أدخل بيانات حسابك للوصول إلى مركز المشاريع والمهام.</p>
 
             <div className="mt-7 space-y-4">
               <label className="block"><span className="mb-2 block text-[10px] font-black text-slate-500">اسم المستخدم</span><input value={username} onChange={(e) => setUsername(e.target.value)} className="tech-field" autoComplete="username" /></label>
@@ -71,5 +66,5 @@ export default function LoginScreen({ onLogin }: { onLogin: (username: string, p
 }
 
 function Brand() {
-  return <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-[14px] border border-cyan-300/30 bg-cyan-300/10 text-cyan-300"><Radar size={20} /></div><div><div className="text-sm font-black">مركز التكليفات</div><div className="mt-0.5 text-[9px] font-bold tracking-[0.24em] text-cyan-300/60">OPERATIONS COMMAND</div></div></div>;
+  return <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-[14px] border border-cyan-300/30 bg-cyan-300/10 text-cyan-300"><Radar size={20} /></div><div><div className="text-sm font-black">مركز المشاريع والمهام</div><div className="mt-0.5 text-[9px] font-bold tracking-[0.2em] text-cyan-300/60">OPERATIONS COMMAND</div></div></div>;
 }
