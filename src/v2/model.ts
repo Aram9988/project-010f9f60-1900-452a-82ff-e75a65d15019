@@ -2,6 +2,7 @@ export type Role = "boss" | "head" | "employee";
 export type View = "overview" | "tasks" | "reports";
 export type TaskStatus = "new" | "active" | "waiting" | "review" | "returned" | "done";
 export type Priority = "normal" | "important" | "urgent";
+export type WorkType = "project" | "task";
 
 export type DemoUser = {
   id: string;
@@ -29,6 +30,7 @@ export type Assignment = {
   departmentId: string;
   priority: Priority;
   status: TaskStatus;
+  kind?: WorkType;
   createdAt: string;
   updatedAt: string;
   issuedById: string;
@@ -72,86 +74,36 @@ const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOStr
 export function makeSeedState(): AppState {
   const tasks: Assignment[] = [
     {
-      id: "a-1",
-      number: "TK-0261",
-      title: "مراجعة مخطط شبكة لمبنى إداري",
-      details: "مراجعة توزيع نقاط الشبكة ومسارات الربط ورفع الملاحظات الفنية النهائية.",
-      departmentId: "studies",
-      priority: "important",
-      status: "active",
-      createdAt: ago(31),
-      updatedAt: ago(6),
-      issuedById: "boss",
-      ownerId: "head-studies",
+      id: "a-1", number: "PR-0261", kind: "project", title: "تطوير شبكة لمبنى إداري", details: "مراجعة توزيع نقاط الشبكة ومسارات الربط ورفع الملاحظات الفنية النهائية.", departmentId: "studies", priority: "important", status: "active", createdAt: ago(31), updatedAt: ago(6), issuedById: "boss", ownerId: "head-studies",
       updates: [
-        { id: "u-1", authorId: "boss", text: "تم إصدار التكليف وإحالته إلى قسم الدراسات.", at: ago(31), system: true },
+        { id: "u-1", authorId: "boss", text: "تم إنشاء المشروع وإحالته إلى قسم الدراسات.", at: ago(31), system: true },
         { id: "u-2", authorId: "head-studies", text: "تم الاستلام وبدأت مراجعة المخططات الحالية.", at: ago(27), status: "active" },
         { id: "u-3", authorId: "employee-studies", text: "تم تدقيق نقاط الربط الرئيسية، والعمل جارٍ على الملاحظات النهائية.", at: ago(6) },
       ],
     },
     {
-      id: "a-2",
-      number: "TK-0262",
-      title: "إعداد تصور تغطية كاميرات لموقع تجريبي",
-      details: "اقتراح مواقع الكاميرات ونوع التغطية المطلوبة وإعداد تصور أولي قابل للمراجعة.",
-      departmentId: "studies",
-      priority: "urgent",
-      status: "review",
-      createdAt: ago(24),
-      updatedAt: ago(2),
-      issuedById: "boss",
-      ownerId: "head-studies",
+      id: "a-2", number: "PR-0262", kind: "project", title: "تصميم تغطية كاميرات لموقع تجريبي", details: "اقتراح مواقع الكاميرات ونوع التغطية المطلوبة وإعداد تصور أولي قابل للمراجعة.", departmentId: "studies", priority: "urgent", status: "review", createdAt: ago(24), updatedAt: ago(2), issuedById: "boss", ownerId: "head-studies",
       updates: [
-        { id: "u-4", authorId: "boss", text: "تم إصدار التكليف.", at: ago(24), system: true },
+        { id: "u-4", authorId: "boss", text: "تم إنشاء المشروع.", at: ago(24), system: true },
         { id: "u-5", authorId: "head-studies", text: "اكتمل التصور الأولي وأصبح جاهزاً للمراجعة.", at: ago(2), status: "review", attachment: "camera-layout-demo.pdf" },
       ],
     },
     {
-      id: "a-3",
-      number: "TK-0263",
-      title: "اختبار مسار ربط احتياطي",
-      details: "تنفيذ اختبار وظيفي لمسار الربط الاحتياطي وتوثيق النتيجة والملاحظات.",
-      departmentId: "networks",
-      priority: "normal",
-      status: "waiting",
-      createdAt: ago(18),
-      updatedAt: ago(4),
-      issuedById: "boss",
-      ownerId: "head-networks",
+      id: "a-3", number: "TS-0263", kind: "task", title: "اختبار مسار ربط احتياطي", details: "تنفيذ اختبار وظيفي لمسار الربط الاحتياطي وتوثيق النتيجة والملاحظات.", departmentId: "networks", priority: "normal", status: "waiting", createdAt: ago(18), updatedAt: ago(4), issuedById: "boss", ownerId: "head-networks",
       updates: [
-        { id: "u-6", authorId: "boss", text: "تم إصدار التكليف إلى قسم الشبكات.", at: ago(18), system: true },
+        { id: "u-6", authorId: "boss", text: "تم إنشاء المهمة وإحالتها إلى قسم الشبكات.", at: ago(18), system: true },
         { id: "u-7", authorId: "head-networks", text: "بانتظار توفر نافذة الاختبار المناسبة قبل تنفيذ التبديل.", at: ago(4), status: "waiting" },
       ],
     },
     {
-      id: "a-4",
-      number: "TK-0264",
-      title: "معالجة ملاحظة صيانة في غرفة مراقبة",
-      details: "فحص المشكلة وتوثيق سببها والإجراء التصحيحي المتخذ.",
-      departmentId: "support",
-      priority: "important",
-      status: "new",
-      createdAt: ago(3),
-      updatedAt: ago(3),
-      issuedById: "boss",
-      ownerId: "head-support",
-      updates: [{ id: "u-8", authorId: "boss", text: "تم إصدار التكليف إلى قسم الدعم الفني.", at: ago(3), system: true }],
+      id: "a-4", number: "TS-0264", kind: "task", title: "معالجة ملاحظة صيانة في غرفة مراقبة", details: "فحص المشكلة وتوثيق سببها والإجراء التصحيحي المتخذ.", departmentId: "support", priority: "important", status: "new", createdAt: ago(3), updatedAt: ago(3), issuedById: "boss", ownerId: "head-support",
+      updates: [{ id: "u-8", authorId: "boss", text: "تم إنشاء المهمة وإحالتها إلى قسم الدعم الفني.", at: ago(3), system: true }],
     },
     {
-      id: "a-5",
-      number: "TK-0260",
-      title: "تحديث توثيق الأجهزة في غرفة الخوادم التجريبية",
-      details: "تحديث السجل الفني وحالة الأجهزة وتوثيق التغييرات المنفذة.",
-      departmentId: "systems",
-      priority: "normal",
-      status: "done",
-      createdAt: ago(70),
-      updatedAt: ago(28),
-      issuedById: "boss",
-      ownerId: "head-systems",
+      id: "a-5", number: "TS-0260", kind: "task", title: "تحديث توثيق الأجهزة في غرفة الخوادم التجريبية", details: "تحديث السجل الفني وحالة الأجهزة وتوثيق التغييرات المنفذة.", departmentId: "systems", priority: "normal", status: "done", createdAt: ago(70), updatedAt: ago(28), issuedById: "boss", ownerId: "head-systems",
       updates: [
         { id: "u-9", authorId: "head-systems", text: "تم استكمال التحديث وإرسال السجل للمراجعة.", at: ago(30), status: "review" },
-        { id: "u-10", authorId: "boss", text: "تم الاعتماد وإنهاء التكليف.", at: ago(28), status: "done", system: true },
+        { id: "u-10", authorId: "boss", text: "تم الاعتماد وإنهاء المهمة.", at: ago(28), status: "done", system: true },
       ],
     },
   ];
@@ -160,8 +112,8 @@ export function makeSeedState(): AppState {
     tasks,
     currentUserId: "boss",
     notices: [
-      { id: "n-1", userId: "boss", taskId: "a-2", text: "تكليف جاهز للمراجعة: إعداد تصور تغطية كاميرات", at: ago(2), read: false },
-      { id: "n-2", userId: "head-studies", taskId: "a-1", text: "يوجد تحديث جديد على التكليف TK-0261", at: ago(6), read: false },
+      { id: "n-1", userId: "boss", taskId: "a-2", text: "مشروع جاهز للمراجعة: تصميم تغطية كاميرات", at: ago(2), read: false },
+      { id: "n-2", userId: "head-studies", taskId: "a-1", text: "يوجد تحديث جديد على المشروع PR-0261", at: ago(6), read: false },
     ],
   };
 }
@@ -179,6 +131,11 @@ export const priorityMeta: Record<Priority, string> = {
   normal: "عادي",
   important: "مهم",
   urgent: "عاجل",
+};
+
+export const workTypeMeta: Record<WorkType, string> = {
+  project: "مشروع",
+  task: "مهمة",
 };
 
 export const STORAGE_KEY = "command-center-v2-demo";
