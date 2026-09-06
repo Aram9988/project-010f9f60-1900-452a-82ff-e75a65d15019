@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import ProjectsTasksCenter from "@/v5/App";
+import OperationalCenter from "@/v6/App";
 
 export const Route = createFileRoute("/")({
-  component: ProjectsTasksCenter,
+  component: OperationalCenter,
 });
