@@ -163,21 +163,64 @@
     border-radius: 0;
     border: 0;
     background:
-      radial-gradient(circle at 50% 0%, rgba(34, 211, 238, .08), transparent 32rem),
+      radial-gradient(circle at 50% 0%, rgba(34, 211, 238, .09), transparent 34rem),
+      radial-gradient(circle at 15% 85%, rgba(99,102,241,.07), transparent 30rem),
       linear-gradient(180deg, #07111e 0%, #06101d 100%);
   }
 
+  .topology-control {
+    display: grid;
+    height: 30px;
+    width: 30px;
+    place-items: center;
+    border-radius: 9px;
+    color: #94a3b8;
+    transition: 160ms ease;
+  }
+
+  .topology-control:hover {
+    background: rgba(103,232,249,.08);
+    color: #a5f3fc;
+    box-shadow: inset 0 0 0 1px rgba(103,232,249,.12);
+  }
+
   .topology-flow-line {
-    background-image: linear-gradient(90deg, rgba(34,211,238,.08), rgba(103,232,249,.9), rgba(34,211,238,.08));
-    background-size: 52px 100%;
-    animation: topology-flow-x 1.15s linear infinite;
-    box-shadow: 0 0 7px rgba(34,211,238,.25);
+    background-image: linear-gradient(90deg, rgba(34,211,238,.025) 0%, rgba(34,211,238,.025) 42%, rgba(103,232,249,.95) 50%, rgba(34,211,238,.025) 58%, rgba(34,211,238,.025) 100%);
+    background-size: 180px 100%;
+    animation: topology-flow-x 3.4s linear infinite;
+    box-shadow: 0 0 5px rgba(34,211,238,.16);
   }
 
   .topology-flow-vertical {
-    background-image: linear-gradient(180deg, rgba(34,211,238,.08), rgba(103,232,249,.95), rgba(34,211,238,.08));
-    background-size: 100% 42px;
-    animation: topology-flow-y .9s linear infinite;
+    background-image: linear-gradient(180deg, rgba(34,211,238,.025) 0%, rgba(34,211,238,.025) 42%, rgba(103,232,249,.98) 50%, rgba(34,211,238,.025) 58%, rgba(34,211,238,.025) 100%);
+    background-size: 100% 150px;
+    animation: topology-flow-y 3s linear infinite;
+  }
+
+  .topology-person-node {
+    transition: transform 220ms ease, border-color 220ms ease, background-color 220ms ease, box-shadow 220ms ease;
+  }
+
+  .topology-person-node:hover {
+    transform: translateY(-5px) scale(1.018);
+    border-color: rgba(103,232,249,.28);
+    box-shadow: 0 18px 44px rgba(0,0,0,.3), 0 0 30px rgba(34,211,238,.08);
+    z-index: 30;
+  }
+
+  .topology-worker-active {
+    animation: topology-worker-breathe 2.8s ease-in-out infinite;
+  }
+
+  .topology-worker-active:hover {
+    animation-play-state: paused;
+    transform: translateY(-6px) scale(1.025);
+    box-shadow: 0 22px 52px rgba(0,0,0,.34), 0 0 38px rgba(52,211,153,.19);
+  }
+
+  .topology-worker-dot {
+    animation: topology-worker-dot 2.2s ease-out infinite;
+    box-shadow: 0 0 10px rgba(52,211,153,.8);
   }
 
   .topology-call-alert {
@@ -185,18 +228,33 @@
   }
 
   .topology-root-pulse {
-    animation: topology-root-pulse 1.8s ease-in-out infinite;
+    animation: topology-root-pulse 2.8s ease-in-out infinite;
   }
 }
 
 @keyframes topology-flow-x {
-  from { background-position: -52px 0; }
-  to { background-position: 52px 0; }
+  from { background-position: -180px 0; }
+  to { background-position: 180px 0; }
 }
 
 @keyframes topology-flow-y {
-  from { background-position: 0 -42px; }
-  to { background-position: 0 42px; }
+  from { background-position: 0 -150px; }
+  to { background-position: 0 150px; }
+}
+
+@keyframes topology-worker-breathe {
+  0%, 100% {
+    box-shadow: 0 12px 32px rgba(0,0,0,.24), 0 0 0 0 rgba(52,211,153,0), 0 0 18px rgba(52,211,153,.05);
+  }
+  50% {
+    box-shadow: 0 16px 38px rgba(0,0,0,.27), 0 0 0 3px rgba(52,211,153,.08), 0 0 34px rgba(52,211,153,.16);
+  }
+}
+
+@keyframes topology-worker-dot {
+  0% { box-shadow: 0 0 0 0 rgba(52,211,153,.5), 0 0 10px rgba(52,211,153,.85); }
+  65% { box-shadow: 0 0 0 8px rgba(52,211,153,0), 0 0 15px rgba(52,211,153,.45); }
+  100% { box-shadow: 0 0 0 0 rgba(52,211,153,0), 0 0 8px rgba(52,211,153,.7); }
 }
 
 @keyframes topology-call-blink {
@@ -206,14 +264,16 @@
 
 @keyframes topology-root-pulse {
   0%, 100% { box-shadow: 0 0 24px rgba(34,211,238,.05); }
-  50% { box-shadow: 0 0 44px rgba(34,211,238,.18); }
+  50% { box-shadow: 0 0 48px rgba(34,211,238,.2); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .topology-flow-line,
   .topology-flow-vertical,
   .topology-call-alert,
-  .topology-root-pulse { animation: none !important; }
+  .topology-root-pulse,
+  .topology-worker-active,
+  .topology-worker-dot { animation: none !important; }
 }
 
 @media (max-width: 767px) {
