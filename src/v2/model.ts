@@ -20,6 +20,9 @@ export type UpdateEntry = {
   status?: TaskStatus;
   attachment?: string;
   system?: boolean;
+  editedAt?: string;
+  editedById?: string;
+  originalText?: string;
 };
 
 export type Assignment = {
