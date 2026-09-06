@@ -1,6 +1,6 @@
 import { useMemo, useState, type ChangeEvent } from "react";
-import { CheckCircle2, MessageSquareText, Paperclip, Send, ShieldCheck, UserRound } from "lucide-react";
-import { priorityMeta, statusMeta, type Assignment, type Priority, type TaskStatus } from "../v2/model";
+import { CheckCircle2, MessageSquareText, Paperclip, Pencil, Save, Send, ShieldCheck, UserRound, X } from "lucide-react";
+import { priorityMeta, statusMeta, type Assignment, type Priority, type TaskStatus, type UpdateEntry } from "../v2/model";
 import { descendants, hasPermission, roleOf, type OrgState, type OrgUser } from "./orgModel";
 
 const statusClass: Record<TaskStatus, string> = {
@@ -15,7 +15,7 @@ const statusClass: Record<TaskStatus, string> = {
 export function StatusChip({ status }: { status: TaskStatus }) { return <span className={`inline-flex rounded-lg border px-2.5 py-1 text-[10px] font-bold ${statusClass[status]}`}>{statusMeta[status].label}</span>; }
 function fmt(value: string) { const d = new Date(value); return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("ar-SY", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
 
-export default function WorkDetail({ item, allItems, org, currentUser, onBack, onOpenItem, onAssign, onUpdate, onTransition }: { item: Assignment; allItems: Assignment[]; org: OrgState; currentUser: OrgUser; onBack: () => void; onOpenItem: (id: string) => void; onAssign: (item: Assignment, assigneeId: string) => void; onUpdate: (item: Assignment, text: string, status?: TaskStatus, attachment?: string) => void; onTransition: (item: Assignment, status: TaskStatus, text: string) => void }) {
+export default function WorkDetail({ item, allItems, org, currentUser, onBack, onOpenItem, onAssign, onUpdate, onTransition, onEditUpdate }: { item: Assignment; allItems: Assignment[]; org: OrgState; currentUser: OrgUser; onBack: () => void; onOpenItem: (id: string) => void; onAssign: (item: Assignment, assigneeId: string) => void; onUpdate: (item: Assignment, text: string, status?: TaskStatus, attachment?: string) => void; onTransition: (item: Assignment, status: TaskStatus, text: string) => void; onEditUpdate: (item: Assignment, updateId: string, text: string) => void }) {
   const isProject = item.kind === "project";
   const noun = isProject ? "المشروع" : "المهمة";
   const assignee = org.users.find((u) => u.id === item.assigneeId);
@@ -25,7 +25,10 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
   const children = isProject ? allItems.filter((x) => x.kind === "task" && x.parentProjectId === item.id) : [];
   const canApprove = hasPermission(org, currentUser, "approve_work");
   const canAssign = hasPermission(org, currentUser, "assign_department_tasks") || hasPermission(org, currentUser, "assign_team_tasks");
-  const canWork = item.status !== "done" && (item.assigneeId === currentUser.id || item.ownerId === currentUser.id || canAssign);
+  const isAssignedToCurrentUser = (item.assigneeId ?? item.ownerId) === currentUser.id;
+  const canAccept = item.status === "new" && isAssignedToCurrentUser;
+  const canWork = item.status !== "done" && (isAssignedToCurrentUser || item.ownerId === currentUser.id || canAssign);
+  const isBranchHead = roleOf(org, currentUser)?.key === "branch_head";
 
   const assignable = useMemo(() => {
     if (hasPermission(org, currentUser, "assign_department_tasks")) return org.users.filter((u) => u.active);
@@ -36,11 +39,32 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
     return [];
   }, [org, currentUser]);
 
-  return <div className="mx-auto max-w-6xl space-y-5"><button onClick={onBack} className="text-[11px] font-bold text-slate-500 hover:text-cyan-300">← العودة</button><section className="tech-panel p-5 md:p-7"><div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500"><span className="font-bold text-cyan-300/75">{isProject ? "مشروع" : "مهمة"}</span><span>•</span><span>{dept?.name ?? "بدون قسم"}</span>{item.location && <><span>•</span><span>{item.location}</span></>}</div><h1 className="mt-3 text-2xl font-black md:text-[30px]">{item.title}</h1><div className="mt-4 flex flex-wrap items-center gap-3"><StatusChip status={item.status} /><span className="text-[10px] text-slate-600">الأولوية</span><PriorityChip value={item.priority} /><span className="hidden h-4 w-px bg-white/8 sm:block" /><span className="text-[10px] text-slate-500">المسند إليه: <b className="text-slate-300">{assignee?.name ?? owner?.name ?? "غير محدد"}</b></span></div></div><div className="flex flex-wrap gap-2">{canWork && item.status === "new" && <Primary onClick={() => onTransition(item, "active", `تم استلام ${noun} وبدء التنفيذ.`)}>تأكيد الاستلام</Primary>}{canWork && ["active", "waiting", "returned"].includes(item.status) && <Primary onClick={() => onTransition(item, "review", `تم إرسال ${noun} للاعتماد.`)}>إرسال للاعتماد</Primary>}{canApprove && item.status !== "done" && <Primary onClick={() => onTransition(item, "done", `تم اعتماد ${noun} وإنهاؤه.`)}><CheckCircle2 size={14} />اعتماد وإنهاء</Primary>}{canApprove && item.status === "review" && <button onClick={() => onTransition(item, "returned", `أعيد ${noun} للتعديل.`)} className="h-10 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 text-[11px] font-bold text-rose-300">إعادة للتعديل</button>}</div></div>
+  function reassign(assigneeId: string) {
+    if (!assigneeId || assigneeId === item.assigneeId) return;
+    onAssign(item, assigneeId);
+  }
+
+  return <div className="mx-auto max-w-6xl space-y-5">
+    <button onClick={onBack} className="text-[11px] font-bold text-slate-500 hover:text-cyan-300">← العودة</button>
+    <section className="tech-panel p-5 md:p-7">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500"><span className="font-bold text-cyan-300/75">{isProject ? "مشروع" : "مهمة"}</span><span>•</span><span>{dept?.name ?? "بدون قسم"}</span>{item.location && <><span>•</span><span>{item.location}</span></>}</div>
+          <h1 className="mt-3 text-2xl font-black md:text-[30px]">{item.title}</h1>
+          <div className="mt-4 flex flex-wrap items-center gap-3"><StatusChip status={item.status} /><span className="text-[10px] text-slate-600">الأولوية</span><PriorityChip value={item.priority} /><span className="hidden h-4 w-px bg-white/8 sm:block" /><span className="text-[10px] text-slate-500">المسند إليه: <b className="text-slate-300">{assignee?.name ?? owner?.name ?? "غير محدد"}</b></span></div>
+          {item.status === "new" && <div className="mt-4 inline-flex rounded-xl border border-cyan-300/12 bg-cyan-300/[0.035] px-3 py-2 text-[10px] font-bold text-cyan-200">بانتظار استلام {assignee?.name ?? owner?.name ?? "المسؤول"}. لن يظهر النبض الحي قبل تأكيد الاستلام.</div>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {canAccept && <Primary onClick={() => onTransition(item, "active", `تم استلام ${noun} وبدء التنفيذ. أصبحت الحالة نشطة.`)}>تأكيد الاستلام وبدء التنفيذ</Primary>}
+          {canWork && ["active", "waiting", "returned"].includes(item.status) && <Primary onClick={() => onTransition(item, "review", `تم إرسال ${noun} للاعتماد.`)}>إرسال للاعتماد</Primary>}
+          {canApprove && item.status !== "done" && item.status !== "new" && <Primary onClick={() => onTransition(item, "done", `تم اعتماد ${noun} وإنهاؤه.`)}><CheckCircle2 size={14} />اعتماد وإنهاء</Primary>}
+          {canApprove && item.status === "review" && <button onClick={() => onTransition(item, "returned", `أعيد ${noun} للتعديل.`)} className="h-10 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 text-[11px] font-bold text-rose-300">إعادة للتعديل</button>}
+        </div>
+      </div>
 
       <div className="mt-6 grid gap-3 border-t border-white/7 pt-5 sm:grid-cols-2 lg:grid-cols-4"><Info label="الموقع" value={item.location || "غير محدد"} /><Info label="المرجع" value={item.referenceNumber || "غير محدد"} /><Info label="المسؤول الإداري" value={owner?.name || "غير محدد"} /><Info label="آخر تحديث" value={fmt(item.updatedAt)} /></div>
 
-      {canAssign && !isProject && <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4"><div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-slate-500"><UserRound size={13} />إسناد المهمة</div><select value={item.assigneeId ?? ""} onChange={(e) => e.target.value && onAssign(item, e.target.value)} className="tech-field max-w-md"><option value="">اختر الشخص</option>{assignable.map((u) => <option key={u.id} value={u.id}>{u.name} — {roleOf(org, u)?.name ?? ""}</option>)}</select></div>}
+      {canAssign && !isProject && <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4"><div className="mb-2 flex items-center gap-2 text-[10px] font-bold text-slate-500"><UserRound size={13} />إسناد المهمة</div><select value={item.assigneeId ?? ""} onChange={(e) => reassign(e.target.value)} className="tech-field max-w-md"><option value="">اختر الشخص</option>{assignable.map((u) => <option key={u.id} value={u.id}>{u.name} — {roleOf(org, u)?.name ?? ""}</option>)}</select><p className="mt-2 text-[9px] leading-5 text-slate-600">عند تحويل المهمة إلى شخص آخر تعود إلى حالة «جديد» وتنتظر استلامه. يبدأ النبض في الشجرة فقط بعد أن يؤكد المستلم الاستلام.</p></div>}
 
       {parent && <button onClick={() => onOpenItem(parent.id)} className="mt-5 w-full rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.035] p-4 text-right"><div className="text-[9px] text-slate-600">تابعة للمشروع</div><div className="mt-1 text-xs font-bold">{parent.title}</div></button>}
       {item.details && <div className="mt-5 border-t border-white/7 pt-5"><div className="text-[10px] font-bold text-slate-600">التفاصيل</div><p className="mt-2 text-sm leading-7 text-slate-400">{item.details}</p></div>}
@@ -48,7 +72,24 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
 
     {isProject && <section className="tech-panel overflow-hidden"><div className="border-b border-white/7 px-5 py-4"><h2 className="text-sm font-black">مهام المشروع</h2></div><div className="divide-y divide-white/7">{children.length ? children.map((child) => <button key={child.id} onClick={() => onOpenItem(child.id)} className="flex w-full items-center gap-3 px-5 py-4 text-right hover:bg-white/[0.03]"><span className="min-w-0 flex-1 truncate text-sm font-bold">{child.title}</span><span className="text-[10px] text-slate-600">{org.users.find((u) => u.id === child.assigneeId)?.name ?? "غير مسندة"}</span><StatusChip status={child.status} /></button>) : <div className="p-8 text-center text-xs text-slate-600">لا توجد مهام مرتبطة.</div>}</div></section>}
 
-    <section className="tech-panel p-5 md:p-6"><div className="flex items-end justify-between"><div><h2 className="text-base font-black">سجل العمل</h2><p className="mt-1 text-[11px] text-slate-500">التحديثات والقرارات والمرفقات.</p></div><span className="text-[10px] text-slate-600">{item.updates.length} تحديث</span></div><div className="mt-6 space-y-4">{item.updates.map((u) => <div key={u.id} className="flex gap-3"><span className={`mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full ${u.system ? "bg-slate-700" : "bg-cyan-400 text-slate-950"}`}>{u.system ? <ShieldCheck size={11} /> : <MessageSquareText size={11} />}</span><div className="min-w-0 flex-1 rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-3"><div className="flex justify-between"><span className="text-[11px] font-bold">{u.system ? "النظام" : org.users.find((x) => x.id === u.authorId)?.name ?? "مستخدم"}</span><span className="text-[9px] text-slate-600">{fmt(u.at)}</span></div><p className="mt-2 text-sm leading-7 text-slate-300">{u.text}</p>{u.attachment && <span className="mt-2 inline-flex items-center gap-1 rounded-lg border border-white/8 px-2 py-1 text-[9px] text-slate-500"><Paperclip size={10} />{u.attachment}</span>}</div></div>)}</div><Composer item={item} currentUser={currentUser} onUpdate={onUpdate} /></section></div>;
+    <section className="tech-panel p-5 md:p-6">
+      <div className="flex items-end justify-between"><div><h2 className="text-base font-black">سجل العمل</h2><p className="mt-1 text-[11px] text-slate-500">التحديثات والقرارات والمرفقات. يمكن لصاحب التحديث أو رئيس الفرع تصحيح تحديث غير نظامي مع الاحتفاظ بأثر التعديل.</p></div><span className="text-[10px] text-slate-600">{item.updates.length} تحديث</span></div>
+      <div className="mt-6 space-y-4">{item.updates.map((u) => <UpdateCard key={u.id} update={u} org={org} currentUser={currentUser} item={item} canEdit={!u.system && (u.authorId === currentUser.id || isBranchHead)} onEditUpdate={onEditUpdate} />)}</div>
+      <Composer item={item} currentUser={currentUser} onUpdate={onUpdate} />
+    </section>
+  </div>;
+}
+
+function UpdateCard({ update, org, currentUser, item, canEdit, onEditUpdate }: { update: UpdateEntry; org: OrgState; currentUser: OrgUser; item: Assignment; canEdit: boolean; onEditUpdate: (item: Assignment, updateId: string, text: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(update.text);
+  function save() {
+    const next = text.trim();
+    if (!next || next === update.text) { setEditing(false); setText(update.text); return; }
+    onEditUpdate(item, update.id, next);
+    setEditing(false);
+  }
+  return <div className="flex gap-3"><span className={`mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full ${update.system ? "bg-slate-700" : "bg-cyan-400 text-slate-950"}`}>{update.system ? <ShieldCheck size={11} /> : <MessageSquareText size={11} />}</span><div className="min-w-0 flex-1 rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="text-[11px] font-bold">{update.system ? "النظام" : org.users.find((x) => x.id === update.authorId)?.name ?? "مستخدم"}</span>{update.editedAt && <span className="rounded-md border border-amber-300/12 bg-amber-300/[0.04] px-1.5 py-0.5 text-[8px] font-bold text-amber-300">تم التعديل</span>}</div><div className="flex items-center gap-2"><span className="text-[9px] text-slate-600">{fmt(update.at)}</span>{canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="grid h-7 w-7 place-items-center rounded-lg border border-white/7 text-slate-500 hover:border-cyan-300/20 hover:text-cyan-300" title="تعديل التحديث"><Pencil size={11} /></button>}</div></div>{editing ? <div className="mt-3"><textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} className="tech-field resize-none" /><div className="mt-2 flex justify-end gap-2"><button type="button" onClick={() => { setEditing(false); setText(update.text); }} className="flex h-8 items-center gap-1 rounded-lg border border-white/8 px-3 text-[9px] text-slate-400"><X size={11} />إلغاء</button><button type="button" onClick={save} className="flex h-8 items-center gap-1 rounded-lg bg-cyan-300 px-3 text-[9px] font-black text-slate-950"><Save size={11} />حفظ التصحيح</button></div></div> : <p className="mt-2 text-sm leading-7 text-slate-300">{update.text}</p>}{update.attachment && <span className="mt-2 inline-flex items-center gap-1 rounded-lg border border-white/8 px-2 py-1 text-[9px] text-slate-500"><Paperclip size={10} />{update.attachment}</span>}{update.editedAt && <div className="mt-2 text-[8px] text-slate-600">آخر تعديل: {fmt(update.editedAt)} بواسطة {org.users.find((x) => x.id === update.editedById)?.name ?? currentUser.name}</div>}</div></div>;
 }
 
 function PriorityChip({ value }: { value: Priority }) { return <span className={`text-[10px] font-bold ${value === "urgent" ? "text-rose-300" : value === "important" ? "text-amber-300" : "text-slate-400"}`}>{priorityMeta[value]}</span>; }
@@ -57,7 +98,7 @@ function Primary({ onClick, children }: { onClick: () => void; children: React.R
 
 function Composer({ item, currentUser, onUpdate }: { item: Assignment; currentUser: OrgUser; onUpdate: (item: Assignment, text: string, status?: TaskStatus, attachment?: string) => void }) {
   const [text, setText] = useState(""); const [file, setFile] = useState("");
-  if (item.status === "done") return <div className="mt-6 rounded-xl border border-emerald-300/12 bg-emerald-300/5 p-3 text-[11px] font-bold text-emerald-300">العمل مكتمل ومعتمد.</div>;
+  if (item.status === "done") return <div className="mt-6 rounded-xl border border-emerald-300/12 bg-emerald-300/5 p-3 text-[11px] font-bold text-emerald-300">العمل مكتمل ومعتمد. يبقى سجل العمل قابلاً للمراجعة، ويمكن تصحيح التحديثات المسموح بها من زر التعديل.</div>;
   function pick(e: ChangeEvent<HTMLInputElement>) { setFile(e.target.files?.[0]?.name ?? ""); }
   function submit() { if (!text.trim() && !file) return; onUpdate(item, text.trim() || "تم إرفاق ملف جديد.", undefined, file || undefined); setText(""); setFile(""); }
   return <div className="mt-6 rounded-2xl border border-white/8 bg-black/10 p-3"><textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder={`أضف تحديثاً باسم ${currentUser.name}...`} className="w-full resize-none bg-transparent p-2 text-sm outline-none placeholder:text-slate-600" /><div className="flex flex-col gap-2 border-t border-white/7 pt-3 sm:flex-row"><label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/8 px-3 py-2 text-[10px] text-slate-500"><Paperclip size={13} />{file || "إرفاق ملف"}<input type="file" className="hidden" onChange={pick} /></label><button onClick={submit} className="mr-auto flex h-9 items-center gap-2 rounded-xl bg-cyan-300 px-4 text-[10px] font-black text-slate-950"><Send size={12} />إرسال التحديث</button></div></div>;
