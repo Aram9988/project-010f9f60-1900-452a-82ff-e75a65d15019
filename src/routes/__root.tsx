@@ -9,6 +9,7 @@ function NotFoundComponent() {
   return (
     <div className="tech-shell flex min-h-screen items-center justify-center px-4 text-slate-100">
       <div className="tech-panel max-w-md p-8 text-center">
+        <img src="./branch-emblem.svg" alt="شعار فرع اتصالات ريف دمشق" className="mx-auto mb-5 h-16 w-20 object-contain" />
         <div className="text-5xl font-black text-white">404</div>
         <h2 className="mt-4 text-lg font-black">الصفحة غير موجودة</h2>
         <p className="mt-2 text-sm leading-6 text-slate-500">الرابط الذي فتحته غير متوفر في النسخة الحالية.</p>
@@ -25,6 +26,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="tech-shell flex min-h-screen items-center justify-center px-4 text-slate-100">
       <div className="tech-panel max-w-md p-8 text-center">
+        <img src="./branch-emblem.svg" alt="شعار فرع اتصالات ريف دمشق" className="mx-auto mb-5 h-16 w-20 object-contain" />
         <h1 className="text-xl font-black">تعذر تحميل الصفحة</h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">حدث خطأ غير متوقع. يمكنك إعادة المحاولة دون فقدان البيانات التجريبية المحفوظة على هذا الجهاز.</p>
         <div className="mt-6 flex justify-center gap-2">
@@ -49,8 +51,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "./branch-icon.svg", type: "image/svg+xml" },
-      { rel: "shortcut icon", href: "./branch-icon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "./branch-emblem.svg", type: "image/svg+xml" },
+      { rel: "shortcut icon", href: "./branch-emblem.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "./branch-emblem.svg" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" },
