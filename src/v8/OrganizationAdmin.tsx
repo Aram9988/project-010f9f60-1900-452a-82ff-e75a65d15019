@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Building2, Pencil, Plus, Save, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import { Building2, ImagePlus, Pencil, Plus, Save, ShieldCheck, Trash2, UserRound, UsersRound, X } from "lucide-react";
 import type { OrgDepartment, OrgOffice, OrgRole, OrgState, OrgUser, PermissionKey } from "./orgModel";
 
 const permissionLabels: Record<PermissionKey, string> = {
@@ -17,6 +17,32 @@ const permissionLabels: Record<PermissionKey, string> = {
 };
 const allPermissions = Object.keys(permissionLabels) as PermissionKey[];
 const uid = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+
+function imageToAvatar(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) { reject(new Error("not-image")); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("invalid-image"));
+      img.onload = () => {
+        const size = Math.min(img.naturalWidth, img.naturalHeight);
+        const sx = Math.max(0, (img.naturalWidth - size) / 2);
+        const sy = Math.max(0, (img.naturalHeight - size) / 2);
+        const canvas = document.createElement("canvas");
+        canvas.width = 420;
+        canvas.height = 420;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas")); return; }
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, 420, 420);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function OrganizationAdmin({ state, onChange }: { state: OrgState; onChange: (next: OrgState) => void }) {
   const [tab, setTab] = useState<"users" | "roles" | "departments" | "offices">("users");
@@ -54,7 +80,7 @@ export default function OrganizationAdmin({ state, onChange }: { state: OrgState
     <div><div className="text-[10px] tracking-[.2em] text-cyan-300/50">ORGANIZATION ADMIN</div><h1 className="mt-2 text-2xl font-black">إدارة الهيكل والصلاحيات</h1><p className="mt-1 max-w-3xl text-xs leading-6 text-slate-500">إدارة المستخدمين والأدوار والأقسام والمكاتب. أي تعديل يظهر مباشرة في شجرة الفرع.</p></div>
     <div className="flex gap-2 overflow-x-auto rounded-2xl border border-white/8 bg-white/[0.02] p-1.5"><Tab active={tab === "users"} onClick={() => setTab("users")} label="المستخدمون" /><Tab active={tab === "roles"} onClick={() => setTab("roles")} label="الأدوار" /><Tab active={tab === "departments"} onClick={() => setTab("departments")} label="الأقسام" /><Tab active={tab === "offices"} onClick={() => setTab("offices")} label="المكاتب" /></div>
 
-    {tab === "users" && <Section title="المستخدمون" icon={<UsersRound size={17} />} action="إضافة مستخدم" onAction={() => setEditingUser({ id: uid("user"), name: "", username: "", password: "demo", roleId: state.roles[0]?.id ?? "", active: true })}>{state.users.map((u) => <Row key={u.id} title={u.name || "مستخدم بدون اسم"} subtitle={`${state.roles.find((r) => r.id === u.roleId)?.name ?? "بدون دور"}${u.departmentId ? ` · ${state.departments.find((d) => d.id === u.departmentId)?.name ?? ""}` : ""}${u.officeId ? ` · ${state.offices.find((o) => o.id === u.officeId)?.name ?? ""}` : ""}`} onEdit={() => setEditingUser(u)} onDelete={() => onChange({ ...state, users: state.users.filter((x) => x.id !== u.id), departments: state.departments.map((d) => d.headUserId === u.id ? { ...d, headUserId: undefined } : d), offices: state.offices.map((o) => o.responsibleUserId === u.id ? { ...o, responsibleUserId: undefined } : o) })} />)}</Section>}
+    {tab === "users" && <Section title="المستخدمون" icon={<UsersRound size={17} />} action="إضافة مستخدم" onAction={() => setEditingUser({ id: uid("user"), name: "", username: "", password: "demo", roleId: state.roles[0]?.id ?? "", active: true })}>{state.users.map((u) => <Row key={u.id} avatar={u.avatarDataUrl} title={u.name || "مستخدم بدون اسم"} subtitle={`${state.roles.find((r) => r.id === u.roleId)?.name ?? "بدون دور"}${u.departmentId ? ` · ${state.departments.find((d) => d.id === u.departmentId)?.name ?? ""}` : ""}${u.officeId ? ` · ${state.offices.find((o) => o.id === u.officeId)?.name ?? ""}` : ""}`} onEdit={() => setEditingUser(u)} onDelete={() => onChange({ ...state, users: state.users.filter((x) => x.id !== u.id), departments: state.departments.map((d) => d.headUserId === u.id ? { ...d, headUserId: undefined } : d), offices: state.offices.map((o) => o.responsibleUserId === u.id ? { ...o, responsibleUserId: undefined } : o) })} />)}</Section>}
 
     {tab === "roles" && <Section title="الأدوار والصلاحيات" icon={<ShieldCheck size={17} />} action="إضافة دور" onAction={() => setEditingRole({ id: uid("role"), key: uid("custom"), name: "", permissions: [] })}>{state.roles.map((r) => <Row key={r.id} title={r.name} subtitle={`${r.permissions.length} صلاحية`} onEdit={() => setEditingRole(r)} onDelete={!r.system ? () => onChange({ ...state, roles: state.roles.filter((x) => x.id !== r.id) }) : undefined} />)}</Section>}
 
@@ -71,8 +97,37 @@ export default function OrganizationAdmin({ state, onChange }: { state: OrgState
 
 function UserDialog({ state, user, onClose, onSave }: { state: OrgState; user: OrgUser; onClose: () => void; onSave: (u: OrgUser) => void }) {
   const [draft, setDraft] = useState(user);
+  const [imageError, setImageError] = useState("");
   const managers = useMemo(() => state.users.filter((u) => u.id !== draft.id && u.active), [state.users, draft.id]);
-  return <Modal title="المستخدم" onClose={onClose}><div className="grid gap-3 sm:grid-cols-2"><Field label="الاسم"><input className="tech-field" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field><Field label="اسم المستخدم"><input className="tech-field" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} /></Field><Field label="كلمة المرور التجريبية"><input className="tech-field" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} /></Field><Field label="الدور"><select className="tech-field" value={draft.roleId} onChange={(e) => setDraft({ ...draft, roleId: e.target.value })}>{state.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></Field><Field label="القسم"><select className="tech-field" value={draft.departmentId ?? ""} onChange={(e) => setDraft({ ...draft, departmentId: e.target.value || undefined, officeId: undefined })}><option value="">بدون قسم</option>{state.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="المكتب"><select className="tech-field" value={draft.officeId ?? ""} onChange={(e) => setDraft({ ...draft, officeId: e.target.value || undefined })}><option value="">بدون مكتب</option>{state.offices.filter((o) => !draft.departmentId || o.departmentId === draft.departmentId).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></Field><Field label="المسؤول المباشر"><select className="tech-field" value={draft.managerId ?? ""} onChange={(e) => setDraft({ ...draft, managerId: e.target.value || undefined })}><option value="">بدون مسؤول مباشر</option>{managers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field><Field label="الحالة"><select className="tech-field" value={draft.active ? "1" : "0"} onChange={(e) => setDraft({ ...draft, active: e.target.value === "1" })}><option value="1">فعال</option><option value="0">موقوف</option></select></Field></div><SaveBar disabled={!draft.name.trim() || !draft.username.trim() || !draft.roleId} onClose={onClose} onSave={() => onSave(draft)} /></Modal>;
+
+  async function chooseImage(file?: File) {
+    if (!file) return;
+    setImageError("");
+    try {
+      const avatarDataUrl = await imageToAvatar(file);
+      setDraft((current) => ({ ...current, avatarDataUrl }));
+    } catch {
+      setImageError("تعذر قراءة الصورة. اختر ملف صورة صالحاً.");
+    }
+  }
+
+  return <Modal title="المستخدم" onClose={onClose}>
+    <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.025] p-4 sm:flex-row sm:items-center">
+      <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/20 text-slate-500">
+        {draft.avatarDataUrl ? <img src={draft.avatarDataUrl} alt={draft.name || "صورة المستخدم"} className="h-full w-full object-cover" /> : <UserRound size={32} />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-black text-slate-200">صورة المستخدم</div>
+        <div className="mt-1 text-[10px] leading-5 text-slate-600">اختر صورة للشخص. سيتم قصّها تلقائياً بشكل مربع وضغطها للاستخدام داخل شجرة الفريق.</div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-cyan-300 px-3 py-2 text-[10px] font-black text-slate-950"><ImagePlus size={13} />اختيار صورة<input type="file" accept="image/*" className="hidden" onChange={(e) => { void chooseImage(e.target.files?.[0]); e.currentTarget.value = ""; }} /></label>
+          {draft.avatarDataUrl && <button type="button" onClick={() => setDraft({ ...draft, avatarDataUrl: undefined })} className="rounded-xl border border-rose-300/15 px-3 py-2 text-[10px] font-bold text-rose-300">إزالة الصورة</button>}
+        </div>
+        {imageError && <div className="mt-2 text-[9px] font-bold text-rose-300">{imageError}</div>}
+      </div>
+    </div>
+    <div className="grid gap-3 sm:grid-cols-2"><Field label="الاسم"><input className="tech-field" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field><Field label="اسم المستخدم"><input className="tech-field" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} /></Field><Field label="كلمة المرور التجريبية"><input className="tech-field" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} /></Field><Field label="الدور"><select className="tech-field" value={draft.roleId} onChange={(e) => setDraft({ ...draft, roleId: e.target.value })}>{state.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></Field><Field label="القسم"><select className="tech-field" value={draft.departmentId ?? ""} onChange={(e) => setDraft({ ...draft, departmentId: e.target.value || undefined, officeId: undefined })}><option value="">بدون قسم</option>{state.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="المكتب"><select className="tech-field" value={draft.officeId ?? ""} onChange={(e) => setDraft({ ...draft, officeId: e.target.value || undefined })}><option value="">بدون مكتب</option>{state.offices.filter((o) => !draft.departmentId || o.departmentId === draft.departmentId).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></Field><Field label="المسؤول المباشر"><select className="tech-field" value={draft.managerId ?? ""} onChange={(e) => setDraft({ ...draft, managerId: e.target.value || undefined })}><option value="">بدون مسؤول مباشر</option>{managers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field><Field label="الحالة"><select className="tech-field" value={draft.active ? "1" : "0"} onChange={(e) => setDraft({ ...draft, active: e.target.value === "1" })}><option value="1">فعال</option><option value="0">موقوف</option></select></Field></div><SaveBar disabled={!draft.name.trim() || !draft.username.trim() || !draft.roleId} onClose={onClose} onSave={() => onSave(draft)} />
+  </Modal>;
 }
 
 function RoleDialog({ role, onClose, onSave }: { role: OrgRole; onClose: () => void; onSave: (r: OrgRole) => void }) {
@@ -104,7 +159,7 @@ function OfficeDialog({ state, office, onClose, onSave }: { state: OrgState; off
 }
 
 function Section({ title, icon, action, onAction, children }: { title: string; icon: React.ReactNode; action: string; onAction: () => void; children: React.ReactNode }) { return <section className="tech-panel overflow-hidden"><div className="flex items-center justify-between border-b border-white/7 px-5 py-4"><div className="flex items-center gap-2 text-sm font-black">{icon}{title}</div><button onClick={onAction} className="flex h-9 items-center gap-2 rounded-xl bg-cyan-300 px-3 text-[10px] font-black text-slate-950"><Plus size={13} />{action}</button></div><div className="divide-y divide-white/7">{children}</div></section>; }
-function Row({ title, subtitle, onEdit, onDelete }: { title: string; subtitle: string; onEdit: () => void; onDelete?: () => void }) { return <div className="flex items-center gap-3 px-5 py-4"><div className="min-w-0 flex-1"><div className="text-sm font-bold text-slate-100">{title}</div><div className="mt-1 text-[10px] text-slate-600">{subtitle}</div></div><button onClick={onEdit} className="icon-btn"><Pencil size={14} /></button>{onDelete && <button onClick={onDelete} className="icon-btn text-rose-300"><Trash2 size={14} /></button>}</div>; }
+function Row({ title, subtitle, avatar, onEdit, onDelete }: { title: string; subtitle: string; avatar?: string; onEdit: () => void; onDelete?: () => void }) { return <div className="flex items-center gap-3 px-5 py-4">{avatar && <img src={avatar} alt="" className="h-10 w-10 shrink-0 rounded-xl border border-white/10 object-cover" />}<div className="min-w-0 flex-1"><div className="text-sm font-bold text-slate-100">{title}</div><div className="mt-1 text-[10px] text-slate-600">{subtitle}</div></div><button onClick={onEdit} className="icon-btn"><Pencil size={14} /></button>{onDelete && <button onClick={onDelete} className="icon-btn text-rose-300"><Trash2 size={14} /></button>}</div>; }
 function Tab({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) { return <button onClick={onClick} className={`shrink-0 rounded-xl px-4 py-2 text-[11px] font-bold ${active ? "bg-white text-slate-950" : "text-slate-500 hover:bg-white/5"}`}>{label}</button>; }
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) { return <div className="fixed inset-0 z-[90] grid place-items-center overflow-y-auto bg-[#020611]/80 p-4 backdrop-blur-sm"><div className="tech-panel my-6 w-full max-w-2xl p-6"><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-black">{title}</h2><button onClick={onClose} className="icon-btn"><X size={16} /></button></div>{children}</div></div>; }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-2 block text-[9px] font-bold text-slate-500">{label}</span>{children}</label>; }
