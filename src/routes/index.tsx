@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import CommandCenterApp from "@/v2/App";
+import ModernCommandCenter from "@/v3/App";
 
 export const Route = createFileRoute("/")({
-  component: CommandCenterApp,
+  component: ModernCommandCenter,
 });
