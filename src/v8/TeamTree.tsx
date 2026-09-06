@@ -109,6 +109,13 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
     setZoom(Math.min(1.7, Math.max(0.28, Number(next.toFixed(2)))));
   }
 
+  function onTopologyWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (!isFullscreen) return;
+    e.preventDefault();
+    const step = e.deltaY < 0 ? 0.1 : -0.1;
+    setZoom((currentZoom) => Math.min(1.7, Math.max(0.28, Number((currentZoom + step).toFixed(2)))));
+  }
+
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!isFullscreen || e.button !== 0) return;
     if ((e.target as HTMLElement).closest("button")) return;
@@ -164,7 +171,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
 
       <section ref={panelRef} className={`tech-panel overflow-hidden ${isFullscreen ? "topology-fullscreen" : ""}`}>
         <div className="flex items-center justify-between gap-3 border-b border-white/7 px-4 py-3 md:px-6">
-          <div className="text-[10px] text-slate-600">المسارات الحية تتحرك بهدوء نحو الأشخاص العاملين. في ملء الشاشة اسحب بالماوس أو اللمس لتحريك المخطط.</div>
+          <div className="text-[10px] text-slate-600">المسارات الحية تتحرك بهدوء نحو الأشخاص العاملين. في ملء الشاشة استخدم عجلة الماوس للتكبير والتصغير، واسحب بالماوس أو اللمس لتحريك المخطط.</div>
           <div className="flex shrink-0 items-center gap-2">
             {isFullscreen && <div className="flex items-center gap-1 rounded-xl border border-white/8 bg-black/15 p-1">
               <button type="button" onClick={() => setZoomSafe(zoom - 0.1)} className="topology-control" title="تصغير"><Minus size={14} /></button>
@@ -181,7 +188,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          onWheel={(e) => { if (isFullscreen) e.preventDefault(); }}
+          onWheel={onTopologyWheel}
           className={`topology-scroll relative p-5 md:p-8 ${isFullscreen ? `h-[calc(100vh-58px)] overflow-hidden select-none touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}` : "overflow-auto"}`}
         >
           <div
