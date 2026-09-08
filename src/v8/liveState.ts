@@ -4,6 +4,12 @@ import { ORG_STORAGE_KEY, loadOrgState, saveOrgState, type OrgState } from "./or
 
 const APP_CHANNEL = "rif-dimashq-command-center-app-v1";
 const ORG_CHANNEL = "rif-dimashq-command-center-org-v1";
+export const WORKSPACE_SYNC_KEY_STORAGE = "rif-dimashq-workspace-sync-key-v1";
+const SYNC_ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
+const POLL_MS = 2000;
+
+type RemotePayload = { app?: AppState; org?: OrgState };
+type RemoteSnapshot = { payload?: RemotePayload; revision?: number; updated_at?: string; error?: string };
 
 function byTime(a: string | undefined, b: string | undefined) {
   return (a ?? "").localeCompare(b ?? "");
@@ -13,16 +19,9 @@ function repairAssignment(input: Assignment): Assignment {
   const updates = Array.isArray(input.updates) ? [...input.updates] : [];
   const assigneeId = input.assigneeId ?? input.ownerId;
   let status = input.status;
-
-  // The latest explicit workflow update is authoritative when an old browser tab
-  // wrote a stale "new" snapshot after the work had already been accepted.
-  const statusUpdates = updates
-    .filter((u) => Boolean(u.status))
-    .sort((a, b) => byTime(a.at, b.at));
+  const statusUpdates = updates.filter((u) => Boolean(u.status)).sort((a, b) => byTime(a.at, b.at));
   const latestStatusUpdate = statusUpdates.length ? statusUpdates[statusUpdates.length - 1] : undefined;
-  if (status === "new" && latestStatusUpdate?.status && latestStatusUpdate.status !== "new") {
-    status = latestStatusUpdate.status;
-  }
+  if (status === "new" && latestStatusUpdate?.status && latestStatusUpdate.status !== "new") status = latestStatusUpdate.status;
 
   const acceptedUpdate = [...statusUpdates].reverse().find((u) => u.status === "active");
   const acceptedForCurrentAssignee = input.acceptedAssigneeId === assigneeId;
@@ -56,13 +55,55 @@ function readStoredAppState(): AppState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? normalizeAppState(JSON.parse(raw) as Partial<AppState>) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function writeStoredAppState(state: AppState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function syncKey() {
+  return typeof window === "undefined" ? "" : localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? "";
+}
+
+async function pullRemote(): Promise<RemoteSnapshot | null> {
+  const key = syncKey();
+  if (!key) return null;
+  try {
+    const res = await fetch(SYNC_ENDPOINT, { headers: { "x-workspace-key": key } });
+    if (!res.ok) return null;
+    return await res.json() as RemoteSnapshot;
+  } catch { return null; }
+}
+
+async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
+  const key = syncKey();
+  if (!key) return;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const current = await pullRemote();
+    if (!current) return;
+    const payload: RemotePayload = { ...(current.payload ?? {}), [part]: value };
+    try {
+      const res = await fetch(SYNC_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-workspace-key": key },
+        body: JSON.stringify({ payload, revision: current.revision ?? 0 }),
+      });
+      if (res.ok) return;
+      if (res.status !== 409) return;
+    } catch { return; }
+  }
+}
+
+export async function verifyWorkspaceSyncKey(key: string) {
+  try {
+    const res = await fetch(SYNC_ENDPOINT, { headers: { "x-workspace-key": key.trim() } });
+    return res.ok;
+  } catch { return false; }
+}
+
+export function isWorkspaceSyncConfigured() {
+  return Boolean(syncKey());
 }
 
 export function useLiveAppState(): [AppState, Dispatch<SetStateAction<AppState>>] {
@@ -80,27 +121,43 @@ export function useLiveAppState(): [AppState, Dispatch<SetStateAction<AppState>>
 
     const onStorage = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY || !event.newValue) return;
-      try { setState(normalizeAppState(JSON.parse(event.newValue) as Partial<AppState>)); } catch { /* ignore malformed external data */ }
+      try { setState(normalizeAppState(JSON.parse(event.newValue) as Partial<AppState>)); } catch { /* ignore */ }
     };
     window.addEventListener("storage", onStorage);
+
+    let disposed = false;
+    const sync = async () => {
+      const remote = await pullRemote();
+      if (disposed || !remote) return;
+      if (remote.payload?.app) {
+        const next = normalizeAppState(remote.payload.app);
+        writeStoredAppState(next);
+        setState(next);
+      } else {
+        await pushRemotePart("app", initial);
+      }
+    };
+    void sync();
+    const timer = window.setInterval(() => void sync(), POLL_MS);
+
     return () => {
+      disposed = true;
+      window.clearInterval(timer);
       window.removeEventListener("storage", onStorage);
       channel?.close();
       channelRef.current = null;
     };
-    // Initial state is intentionally captured once; all later synchronization is event-driven.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setLiveState = useCallback<Dispatch<SetStateAction<AppState>>>((action) => {
     setState((current) => {
-      // Always mutate the most recent persisted snapshot, not a stale tab snapshot.
-      // This prevents creating a new project from reverting an older accepted project.
       const base = readStoredAppState() ?? current;
       const proposed = typeof action === "function" ? action(base) : action;
       const next = normalizeAppState(proposed);
       writeStoredAppState(next);
       channelRef.current?.postMessage(next);
+      void pushRemotePart("app", next);
       return next;
     });
   }, []);
@@ -113,16 +170,34 @@ export function useLiveOrgState(): [OrgState, Dispatch<SetStateAction<OrgState>>
   const channelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
+    const initial = loadOrgState();
     const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(ORG_CHANNEL) : null;
     channelRef.current = channel;
     if (channel) channel.onmessage = (event) => setState(event.data as OrgState);
 
     const onStorage = (event: StorageEvent) => {
       if (event.key !== ORG_STORAGE_KEY || !event.newValue) return;
-      try { setState(JSON.parse(event.newValue) as OrgState); } catch { /* ignore malformed external data */ }
+      try { setState(JSON.parse(event.newValue) as OrgState); } catch { /* ignore */ }
     };
     window.addEventListener("storage", onStorage);
+
+    let disposed = false;
+    const sync = async () => {
+      const remote = await pullRemote();
+      if (disposed || !remote) return;
+      if (remote.payload?.org) {
+        saveOrgState(remote.payload.org);
+        setState(remote.payload.org);
+      } else {
+        await pushRemotePart("org", initial);
+      }
+    };
+    void sync();
+    const timer = window.setInterval(() => void sync(), POLL_MS);
+
     return () => {
+      disposed = true;
+      window.clearInterval(timer);
       window.removeEventListener("storage", onStorage);
       channel?.close();
       channelRef.current = null;
@@ -130,11 +205,12 @@ export function useLiveOrgState(): [OrgState, Dispatch<SetStateAction<OrgState>>
   }, []);
 
   const setLiveState = useCallback<Dispatch<SetStateAction<OrgState>>>((action) => {
-    setState(() => {
-      const latest = loadOrgState();
+    setState((current) => {
+      const latest = loadOrgState() ?? current;
       const next = typeof action === "function" ? action(latest) : action;
       saveOrgState(next);
       channelRef.current?.postMessage(next);
+      void pushRemotePart("org", next);
       return next;
     });
   }, []);
