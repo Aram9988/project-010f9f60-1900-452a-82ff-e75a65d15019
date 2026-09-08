@@ -25,7 +25,7 @@ export type UpdateEntry = {
   text: string;
   at: string;
   status?: TaskStatus;
-  attachment?: string | AttachmentRef;
+  attachment?: string;
   system?: boolean;
   editedAt?: string;
   editedById?: string;
@@ -79,7 +79,7 @@ export type CallRequest = {
 export type AppState = {
   tasks: Assignment[];
   notices: Notice[];
-  callRequests: CallRequest[];
+  callRequests?: CallRequest[];
   currentUserId: string;
 };
 
