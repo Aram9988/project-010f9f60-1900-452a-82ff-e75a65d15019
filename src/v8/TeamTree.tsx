@@ -132,17 +132,18 @@ export default function TeamTree({
   }, [isFullscreen]);
 
   if (!currentUser) return null;
+  const actor = currentUser;
 
-  const currentRole = roleOf(state, currentUser);
+  const currentRole = roleOf(state, actor);
   const branchHead = state.users.find((user) => user.active && roleOf(state, user)?.key === "branch_head");
-  const root = currentRole?.key === "branch_head" ? branchHead ?? currentUser : currentUser;
+  const root = currentRole?.key === "branch_head" ? branchHead ?? actor : actor;
   const visibleUsers = [root, ...descendants(state, root.id)].filter((user) => user.active);
   const visibleIds = new Set(visibleUsers.map((user) => user.id));
   const workingCount = visibleUsers.filter((user) => directActive(user.id, items)).length;
   const activeCalls = (liveApp.callRequests ?? []).filter((request) => request.active);
-  const allowedCallTarget = callTargetFor(state, currentUser);
+  const allowedCallTarget = callTargetFor(state, actor);
   const myActiveCall = allowedCallTarget
-    ? activeCalls.find((request) => request.fromUserId === currentUser.id && request.toUserId === allowedCallTarget)
+    ? activeCalls.find((request) => request.fromUserId === actor.id && request.toUserId === allowedCallTarget)
     : undefined;
 
   function requestCall() {
@@ -151,7 +152,7 @@ export default function TeamTree({
     const target = state.users.find((user) => user.id === allowedCallTarget);
     const request: CallRequest = {
       id: `call-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      fromUserId: currentUser.id,
+      fromUserId: actor.id,
       toUserId: allowedCallTarget,
       createdAt: at,
       active: true,
@@ -159,7 +160,7 @@ export default function TeamTree({
 
     setLiveApp((latest) => {
       const calls = latest.callRequests ?? [];
-      if (calls.some((call) => call.active && call.fromUserId === currentUser.id && call.toUserId === allowedCallTarget)) return latest;
+      if (calls.some((call) => call.active && call.fromUserId === actor.id && call.toUserId === allowedCallTarget)) return latest;
       return {
         ...latest,
         callRequests: [request, ...calls],
@@ -167,7 +168,7 @@ export default function TeamTree({
           {
             id: `notice-${request.id}`,
             userId: allowedCallTarget,
-            text: `طلب اتصال من ${currentUser.name}${target ? ` إلى ${target.name}` : ""}.`,
+            text: `طلب اتصال من ${actor.name}${target ? ` إلى ${target.name}` : ""}.`,
             at,
             read: false,
           },
@@ -181,7 +182,7 @@ export default function TeamTree({
     const at = new Date().toISOString();
     setLiveApp((latest) => {
       const call = (latest.callRequests ?? []).find((request) => request.id === id);
-      if (!call || !call.active || call.toUserId !== currentUser.id) return latest;
+      if (!call || !call.active || call.toUserId !== actor.id) return latest;
       return {
         ...latest,
         callRequests: (latest.callRequests ?? []).map((request) =>
@@ -191,7 +192,7 @@ export default function TeamTree({
           {
             id: `notice-resolved-${id}-${Date.now()}`,
             userId: call.fromUserId,
-            text: `تم استلام طلب الاتصال من قبل ${currentUser.name}.`,
+            text: `تم استلام طلب الاتصال من قبل ${actor.name}.`,
             at,
             read: false,
           },
@@ -302,11 +303,11 @@ export default function TeamTree({
               <div className="flex flex-col items-center">
                 <BranchRoot name={state.branchName} active={workingCount > 0} />
                 <CurvedStem />
-                <OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} />
+                <OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={actor.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} />
               </div>
             ) : (
               <div className="flex justify-center">
-                <OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} />
+                <OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={actor.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} />
               </div>
             )}
           </div>
@@ -423,7 +424,7 @@ function PersonNode({ user, roleName, subtitle, activeItems, pendingItems, compl
         <>
           <WorkSection title="الأعمال النشطة" count={activeItems.length} tone="active" items={activeItems} onOpenItem={onOpenItem} />
           {pendingItems.length > 0 && <WorkSection title="بانتظار / غير نشط" count={pendingItems.length} tone="pending" items={pendingItems} onOpenItem={onOpenItem} />}
-          {completedItems.length > 0 && <WorkSection title="الأعمال المنتهية" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} />}
+          {completedItems.length > 0 && <WorkSection title="الأعمال المنتهية" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} />
         </>
       )}
     </div>
