@@ -33,13 +33,14 @@ type Props = {
   onUpdate: (item: Assignment, text: string, status?: TaskStatus, attachment?: string) => void;
   onTransition: (item: Assignment, status: TaskStatus, text: string) => void;
   onEditUpdate: (item: Assignment, updateId: string, text: string) => void;
+  onDeleteUpdate: (item: Assignment, updateId: string) => void;
   onArchive: (item: Assignment) => void;
   onRestore: (item: Assignment) => void;
   onDelete: (item: Assignment) => void;
   onReopen: (item: Assignment) => void;
 };
 
-export default function WorkDetail({ item, allItems, org, currentUser, onBack, onOpenItem, onAssign, onUpdate, onTransition, onEditUpdate, onArchive, onRestore, onDelete, onReopen }: Props) {
+export default function WorkDetail({ item, allItems, org, currentUser, onBack, onOpenItem, onAssign, onUpdate, onTransition, onEditUpdate, onDeleteUpdate, onArchive, onRestore, onDelete, onReopen }: Props) {
   const isProject = item.kind === "project";
   const noun = isProject ? "المشروع" : "المهمة";
   const currentRole = roleOf(org, currentUser);
@@ -146,8 +147,11 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
     </section>}
 
     <section className="tech-panel p-5 md:p-6">
-      <div className="flex items-end justify-between"><div><h2 className="text-base font-black">سجل العمل</h2><p className="mt-1 text-[11px] text-slate-500">{readOnlyProject ? "تظهر تحديثات رئيس الفرع ورئيس القسم فقط." : "التحديثات والقرارات والمرفقات."}</p></div><span className="text-[10px] text-slate-600">{visibleUpdates.length} تحديث</span></div>
-      <div className="mt-6 space-y-4">{visibleUpdates.map((update) => <UpdateCard key={update.id} update={update} org={org} currentUser={currentUser} item={item} canEdit={!readOnlyProject && !update.system && (update.authorId === currentUser.id || isBranch)} onEditUpdate={onEditUpdate} />)}</div>
+      <div className="flex items-end justify-between"><div><h2 className="text-base font-black">سجل العمل</h2><p className="mt-1 text-[11px] text-slate-500">{readOnlyProject ? "تظهر تحديثات رئيس الفرع ورئيس القسم فقط." : "التحديثات والقرارات والمرفقات. يمكن لكل مستخدم تعديل أو حذف تحديثاته الخاصة فقط."}</p></div><span className="text-[10px] text-slate-600">{visibleUpdates.length} تحديث</span></div>
+      <div className="mt-6 space-y-4">{visibleUpdates.map((update) => {
+        const ownsUpdate = !update.system && update.authorId === currentUser.id;
+        return <UpdateCard key={update.id} update={update} org={org} currentUser={currentUser} item={item} canEdit={!readOnlyProject && ownsUpdate} canDelete={!readOnlyProject && ownsUpdate} onEditUpdate={onEditUpdate} onDeleteUpdate={onDeleteUpdate} />;
+      })}</div>
       {readOnlyProject ? <div className="mt-6 rounded-xl border border-white/7 bg-black/10 p-3 text-[10px] text-slate-500">هذا العرض للقراءة فقط لمسؤول المكتب.</div> : item.archivedAt ? <div className="mt-6 text-[10px] text-slate-500">العمل مؤرشف.</div> : <Composer item={item} currentUser={currentUser} onUpdate={onUpdate} />}
     </section>
   </div>;
@@ -158,7 +162,7 @@ function Notice({ children, tone }: { children: React.ReactNode; tone: "cyan" | 
   return <div className={`mt-4 rounded-xl border px-3 py-2 text-[10px] font-bold leading-5 ${classes}`}>{children}</div>;
 }
 
-function UpdateCard({ update, org, currentUser, item, canEdit, onEditUpdate }: { update: UpdateEntry; org: OrgState; currentUser: OrgUser; item: Assignment; canEdit: boolean; onEditUpdate: (item: Assignment, updateId: string, text: string) => void }) {
+function UpdateCard({ update, org, currentUser, item, canEdit, canDelete, onEditUpdate, onDeleteUpdate }: { update: UpdateEntry; org: OrgState; currentUser: OrgUser; item: Assignment; canEdit: boolean; canDelete: boolean; onEditUpdate: (item: Assignment, updateId: string, text: string) => void; onDeleteUpdate: (item: Assignment, updateId: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(update.text);
   const [opening, setOpening] = useState(false);
@@ -180,7 +184,14 @@ function UpdateCard({ update, org, currentUser, item, canEdit, onEditUpdate }: {
   return <div className="flex gap-3">
     <span className={`mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full ${update.system ? "bg-slate-700" : "bg-cyan-400 text-slate-950"}`}>{update.system ? <ShieldCheck size={11} /> : <MessageSquareText size={11} />}</span>
     <div className="min-w-0 flex-1 rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-3">
-      <div className="flex justify-between gap-3"><span className="text-[11px] font-bold">{update.system ? "النظام" : org.users.find((x) => x.id === update.authorId)?.name ?? "مستخدم"}</span><div className="flex gap-2"><span className="text-[9px] text-slate-600">{fmt(update.at)}</span>{canEdit && !editing && <button onClick={() => setEditing(true)}><Pencil size={11} /></button>}</div></div>
+      <div className="flex justify-between gap-3">
+        <span className="text-[11px] font-bold">{update.system ? "النظام" : org.users.find((x) => x.id === update.authorId)?.name ?? "مستخدم"}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] text-slate-600">{fmt(update.at)}</span>
+          {canEdit && !editing && <button type="button" title="تعديل التحديث" aria-label="تعديل التحديث" onClick={() => setEditing(true)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-cyan-300/8 hover:text-cyan-300"><Pencil size={11} /></button>}
+          {canDelete && !editing && <button type="button" title="حذف التحديث" aria-label="حذف التحديث" onClick={() => onDeleteUpdate(item, update.id)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-rose-400/8 hover:text-rose-300"><Trash2 size={11} /></button>}
+        </div>
+      </div>
       {editing ? <div className="mt-3"><textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} className="tech-field resize-none" /><div className="mt-2 flex justify-end gap-2"><button onClick={() => { setEditing(false); setText(update.text); }}><X size={11} /></button><button onClick={save} className="flex items-center gap-1 rounded-lg bg-cyan-300 px-3 py-2 text-[9px] font-black text-slate-950"><Save size={11} />حفظ</button></div></div> : <p className="mt-2 text-sm leading-7 text-slate-300">{update.text}</p>}
       {update.attachment && <div className="mt-3">
         {attachment ? <button type="button" disabled={opening} onClick={openAttachment} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] px-3 py-2 text-[10px] font-bold text-cyan-200 hover:border-cyan-300/30 disabled:opacity-50">{opening ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}{attachmentLabel(update.attachment)}<ExternalLink size={11} /></button> : <span className="inline-flex items-center gap-1 rounded-lg border border-white/7 px-2 py-1 text-[9px] text-slate-500"><Paperclip size={10} />{attachmentLabel(update.attachment)} <span className="text-slate-700">— مرفق قديم غير مخزن مركزياً</span></span>}
