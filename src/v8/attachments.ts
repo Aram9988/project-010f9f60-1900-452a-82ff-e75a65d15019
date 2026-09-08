@@ -6,9 +6,15 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Rf0WyT-WkcYbytquLvqcMw_1kZ0QMiD
 const ATTACHMENT_PREFIX = "__workspace_attachment_v1__:";
 const TUS_VERSION = "1.0.0";
 const TUS_CHUNK_BYTES = 6 * 1024 * 1024;
+const SIMPLE_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
 
 function workspaceKey() {
   return typeof window === "undefined" ? "" : localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? "";
+}
+
+function normalizedFileName(file: File) {
+  const raw = file.name || "attachment";
+  try { return raw.normalize("NFC"); } catch { return raw; }
 }
 
 function utf8Base64(value: string) {
@@ -39,7 +45,7 @@ type SignedUpload = {
 async function getSignedUpload(file: File, key: string): Promise<SignedUpload> {
   const params = new URLSearchParams({
     attachment: "sign-upload",
-    name: file.name || "attachment",
+    name: normalizedFileName(file),
     mime: file.type || "application/octet-stream",
     size: String(file.size),
   });
@@ -131,16 +137,22 @@ async function uploadResumable(file: File, signed: SignedUpload) {
   }
 }
 
-async function uploadLegacyFallback(file: File, key: string): Promise<AttachmentRef> {
+async function uploadSimple(file: File, key: string): Promise<AttachmentRef> {
   const form = new FormData();
-  form.append("file", file, file.name || "attachment");
+  form.append("file", file, normalizedFileName(file));
   const res = await fetch(`${ENDPOINT}?attachment=upload`, {
     method: "POST",
     headers: { "x-workspace-key": key },
     body: form,
   });
-  if (!res.ok) throw new Error(`fallback_upload_failed_${res.status}`);
+  if (!res.ok) throw new Error(`simple_upload_failed_${res.status}`);
   return await res.json() as AttachmentRef;
+}
+
+async function uploadViaTus(file: File, key: string): Promise<AttachmentRef> {
+  const signed = await getSignedUpload(file, key);
+  await uploadResumable(file, signed);
+  return { path: signed.path, name: signed.name, mime: signed.mime, size: file.size };
 }
 
 export async function uploadWorkspaceAttachment(file: File): Promise<AttachmentRef> {
@@ -148,18 +160,25 @@ export async function uploadWorkspaceAttachment(file: File): Promise<AttachmentR
   const key = workspaceKey();
   if (!key) throw new Error("workspace_not_connected");
 
+  // Mobile Safari/Chrome and Android document providers are more reliable with a
+  // normal multipart upload for small documents. Supabase recommends TUS for files
+  // above 6 MB, so use the simple path first below that threshold and resumable TUS
+  // first for larger files. Both paths fall back to each other.
+  const first = file.size <= SIMPLE_UPLOAD_MAX_BYTES
+    ? () => uploadSimple(file, key)
+    : () => uploadViaTus(file, key);
+  const second = file.size <= SIMPLE_UPLOAD_MAX_BYTES
+    ? () => uploadViaTus(file, key)
+    : () => uploadSimple(file, key);
+
   try {
-    const signed = await getSignedUpload(file, key);
-    await uploadResumable(file, signed);
-    return { path: signed.path, name: signed.name, mime: signed.mime, size: file.size };
-  } catch (resumableError) {
-    // Keep uploads operational on browsers/networks that block TUS. The fallback is
-    // the previously working Edge Function path and is especially useful for small PDFs/images.
+    return await first();
+  } catch (firstError) {
     try {
-      return await uploadLegacyFallback(file, key);
-    } catch (fallbackError) {
-      const primary = resumableError instanceof Error ? resumableError.message : "resumable_upload_failed";
-      const secondary = fallbackError instanceof Error ? fallbackError.message : "fallback_upload_failed";
+      return await second();
+    } catch (secondError) {
+      const primary = firstError instanceof Error ? firstError.message : "primary_upload_failed";
+      const secondary = secondError instanceof Error ? secondError.message : "secondary_upload_failed";
       throw new Error(`${primary}|${secondary}`);
     }
   }
@@ -168,7 +187,12 @@ export async function uploadWorkspaceAttachment(file: File): Promise<AttachmentR
 export async function openWorkspaceAttachment(attachment: AttachmentRef) {
   const key = workspaceKey();
   if (!key) throw new Error("workspace_not_connected");
-  const res = await fetch(`${ENDPOINT}?attachment=download&path=${encodeURIComponent(attachment.path)}`, {
+  const params = new URLSearchParams({
+    attachment: "download",
+    path: attachment.path,
+    name: attachment.name || "attachment",
+  });
+  const res = await fetch(`${ENDPOINT}?${params.toString()}`, {
     headers: { "x-workspace-key": key },
   });
   if (!res.ok) throw new Error(`download_failed_${res.status}`);
