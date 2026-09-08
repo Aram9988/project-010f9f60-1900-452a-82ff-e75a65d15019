@@ -2,6 +2,7 @@ import type { AttachmentRef } from "../v2/model";
 import { WORKSPACE_SYNC_KEY_STORAGE } from "./liveState";
 
 const ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Rf0WyT-WkcYbytquLvqcMw_1kZ0QMiD";
 const ATTACHMENT_PREFIX = "__workspace_attachment_v1__:";
 const TUS_VERSION = "1.0.0";
 const TUS_CHUNK_BYTES = 6 * 1024 * 1024;
@@ -50,10 +51,19 @@ async function getSignedUpload(file: File, key: string): Promise<SignedUpload> {
   return await res.json() as SignedUpload;
 }
 
+function tusHeaders(token: string, extra: Record<string, string> = {}) {
+  return {
+    apikey: SUPABASE_PUBLISHABLE_KEY,
+    "x-signature": token,
+    "Tus-Resumable": TUS_VERSION,
+    ...extra,
+  };
+}
+
 async function recoverOffset(uploadUrl: string, token: string) {
   const res = await fetch(uploadUrl, {
     method: "HEAD",
-    headers: { "Tus-Resumable": TUS_VERSION, "x-signature": token },
+    headers: tusHeaders(token),
   });
   if (!res.ok) return null;
   const value = Number(res.headers.get("Upload-Offset") ?? "");
@@ -63,8 +73,7 @@ async function recoverOffset(uploadUrl: string, token: string) {
 async function uploadResumable(file: File, signed: SignedUpload) {
   const createRes = await fetch(signed.tusEndpoint, {
     method: "POST",
-    headers: {
-      "Tus-Resumable": TUS_VERSION,
+    headers: tusHeaders(signed.token, {
       "Upload-Length": String(file.size),
       "Upload-Metadata": metadata({
         bucketName: signed.bucket,
@@ -72,11 +81,13 @@ async function uploadResumable(file: File, signed: SignedUpload) {
         contentType: file.type || "application/octet-stream",
         cacheControl: "3600",
       }),
-      "x-signature": signed.token,
       "x-upsert": "false",
-    },
+    }),
   });
-  if (!createRes.ok) throw new Error(`tus_create_failed_${createRes.status}`);
+  if (!createRes.ok) {
+    const detail = await createRes.text().catch(() => "");
+    throw new Error(`tus_create_failed_${createRes.status}${detail ? `_${detail.slice(0, 160)}` : ""}`);
+  }
 
   const location = createRes.headers.get("Location");
   if (!location) throw new Error("tus_location_missing");
@@ -91,12 +102,10 @@ async function uploadResumable(file: File, signed: SignedUpload) {
       try {
         const res = await fetch(uploadUrl, {
           method: "PATCH",
-          headers: {
-            "Tus-Resumable": TUS_VERSION,
+          headers: tusHeaders(signed.token, {
             "Upload-Offset": String(offset),
             "Content-Type": "application/offset+octet-stream",
-            "x-signature": signed.token,
-          },
+          }),
           body: chunk,
         });
         if (res.ok) {
@@ -106,7 +115,7 @@ async function uploadResumable(file: File, signed: SignedUpload) {
           continue;
         }
       } catch {
-        // Recover from the server offset below. This prevents duplicate chunks if a response was lost.
+        // Recover the server-side offset below before retrying.
       }
 
       const recovered = await recoverOffset(uploadUrl, signed.token);
@@ -122,14 +131,38 @@ async function uploadResumable(file: File, signed: SignedUpload) {
   }
 }
 
+async function uploadLegacyFallback(file: File, key: string): Promise<AttachmentRef> {
+  const form = new FormData();
+  form.append("file", file, file.name || "attachment");
+  const res = await fetch(`${ENDPOINT}?attachment=upload`, {
+    method: "POST",
+    headers: { "x-workspace-key": key },
+    body: form,
+  });
+  if (!res.ok) throw new Error(`fallback_upload_failed_${res.status}`);
+  return await res.json() as AttachmentRef;
+}
+
 export async function uploadWorkspaceAttachment(file: File): Promise<AttachmentRef> {
   if (!file.size) throw new Error("empty_file");
   const key = workspaceKey();
   if (!key) throw new Error("workspace_not_connected");
 
-  const signed = await getSignedUpload(file, key);
-  await uploadResumable(file, signed);
-  return { path: signed.path, name: signed.name, mime: signed.mime, size: file.size };
+  try {
+    const signed = await getSignedUpload(file, key);
+    await uploadResumable(file, signed);
+    return { path: signed.path, name: signed.name, mime: signed.mime, size: file.size };
+  } catch (resumableError) {
+    // Keep uploads operational on browsers/networks that block TUS. The fallback is
+    // the previously working Edge Function path and is especially useful for small PDFs/images.
+    try {
+      return await uploadLegacyFallback(file, key);
+    } catch (fallbackError) {
+      const primary = resumableError instanceof Error ? resumableError.message : "resumable_upload_failed";
+      const secondary = fallbackError instanceof Error ? fallbackError.message : "fallback_upload_failed";
+      throw new Error(`${primary}|${secondary}`);
+    }
+  }
 }
 
 export async function openWorkspaceAttachment(attachment: AttachmentRef) {
