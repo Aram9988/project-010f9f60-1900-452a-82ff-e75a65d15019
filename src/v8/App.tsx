@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Bell, BriefcaseBusiness, ChevronDown, FileSpreadsheet, Gauge, LayoutDashboard, ListTodo, LogOut, Menu, Network, Plus, Search, Send, Settings2, UserRound, X } from "lucide-react";
-import { STORAGE_KEY, makeSeedState, statusMeta, type AppState, type Assignment, type Priority, type TaskStatus, type UpdateEntry, type WorkType } from "../v2/model";
+import { statusMeta, type AppState, type Assignment, type Priority, type TaskStatus, type UpdateEntry, type WorkType } from "../v2/model";
 import NotificationsPanel from "../v4/NotificationsPanel";
 import PrivateWorkspace from "../v7/PrivateWorkspace";
 import OrganizationAdmin from "./OrganizationAdmin";
@@ -8,7 +8,8 @@ import TeamTree from "./TeamTree";
 import WorkDetail from "./WorkDetail";
 import Reports from "./Reports";
 import LoginScreen from "./LoginScreen";
-import { descendants, hasPermission, loadOrgState, roleOf, saveOrgState, teamUserIds, type OrgState, type OrgUser } from "./orgModel";
+import { descendants, hasPermission, roleOf, teamUserIds, type OrgState, type OrgUser } from "./orgModel";
+import { useLiveAppState, useLiveOrgState } from "./liveState";
 
 const SESSION_KEY = "command-center-demo-session";
 const nowIso = () => new Date().toISOString();
@@ -16,28 +17,11 @@ const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice
 const kindOf = (item: Assignment): WorkType => item.kind ?? "task";
 type Page = "overview" | "projects" | "tasks" | "tree" | "reports" | "admin";
 
-function loadAppState(): AppState {
-  const seed = makeSeedState();
-  if (typeof window === "undefined") return seed;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seed;
-    const parsed = JSON.parse(raw) as Partial<AppState>;
-    return {
-      currentUserId: parsed.currentUserId || seed.currentUserId,
-      tasks: Array.isArray(parsed.tasks) ? parsed.tasks.map((t) => ({ ...t, kind: t.kind ?? "task", assigneeId: t.assigneeId ?? t.ownerId, updates: Array.isArray(t.updates) ? t.updates : [], updatedAt: t.updatedAt ?? t.createdAt ?? nowIso() })) : seed.tasks,
-      notices: Array.isArray(parsed.notices) ? parsed.notices : seed.notices,
-    };
-  } catch { return seed; }
-}
-
 export default function App() {
-  const [org, setOrg] = useState<OrgState>(() => loadOrgState());
-  const [app, setApp] = useState<AppState>(() => loadAppState());
+  const [org, setOrg] = useLiveOrgState();
+  const [app, setApp] = useLiveAppState();
   const [sessionUserId, setSessionUserId] = useState<string | null>(() => typeof window !== "undefined" ? sessionStorage.getItem(SESSION_KEY) : null);
 
-  useEffect(() => saveOrgState(org), [org]);
-  useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(app)), [app]);
 
   const login = (userId: string) => {
     sessionStorage.setItem(SESSION_KEY, userId);
@@ -99,7 +83,7 @@ function Shell({ org, setOrg, app, setApp, currentUser, onLogout }: { org: OrgSt
   function updateItem(item: Assignment, text: string, status?: TaskStatus, attachment?: string) {
     const at = nowIso();
     const update: UpdateEntry = { id: uid(), authorId: currentUser.id, text, at, status, attachment };
-    setApp((s) => ({ ...s, tasks: s.tasks.map((x) => x.id === item.id ? { ...x, status: status ?? x.status, updatedAt: at, updates: [...x.updates, update] } : x) }));
+    setApp((s) => ({ ...s, tasks: s.tasks.map((x) => x.id === item.id ? { ...x, status: status ?? x.status, acceptedAt: status === "active" ? at : x.acceptedAt, acceptedById: status === "active" ? currentUser.id : x.acceptedById, acceptedAssigneeId: status === "active" ? (x.assigneeId ?? x.ownerId) : x.acceptedAssigneeId, updatedAt: at, updates: [...x.updates, update] } : x) }));
     const branchHead = org.users.find((u) => roleOf(org, u)?.key === "branch_head");
     const recipients = new Set<string>();
     [item.issuedById, item.ownerId, item.assigneeId, branchHead?.id].forEach((id) => { if (id && id !== currentUser.id) recipients.add(id); });
@@ -111,7 +95,7 @@ function Shell({ org, setOrg, app, setApp, currentUser, onLogout }: { org: OrgSt
     const assignee = org.users.find((u) => u.id === assigneeId);
     if (!assignee || assigneeId === item.assigneeId) return;
     const at = nowIso();
-    setApp((s) => ({ ...s, tasks: s.tasks.map((x) => x.id === item.id ? { ...x, assigneeId, departmentId: assignee.departmentId ?? x.departmentId, status: "new", updatedAt: at, updates: [...x.updates, { id: uid(), authorId: currentUser.id, text: `تم تحويل المهمة إلى ${assignee.name}. بانتظار تأكيد الاستلام قبل بدء التنفيذ.`, at, status: "new", system: true }] } : x) }));
+    setApp((s) => ({ ...s, tasks: s.tasks.map((x) => x.id === item.id ? { ...x, assigneeId, departmentId: assignee.departmentId ?? x.departmentId, status: "new", acceptedAt: undefined, acceptedById: undefined, acceptedAssigneeId: undefined, updatedAt: at, updates: [...x.updates, { id: uid(), authorId: currentUser.id, text: `تم تحويل المهمة إلى ${assignee.name}. بانتظار تأكيد الاستلام قبل بدء التنفيذ.`, at, status: "new", system: true }] } : x) }));
     notify(assigneeId, `مهمة مسندة إليك بانتظار تأكيد الاستلام: ${item.title}`, item.id);
     if (item.assigneeId && item.assigneeId !== currentUser.id) notify(item.assigneeId, `تم تحويل المهمة من عهدتك إلى ${assignee.name}: ${item.title}`, item.id);
   }

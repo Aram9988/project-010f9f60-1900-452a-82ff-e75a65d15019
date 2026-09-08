@@ -48,7 +48,8 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
   const canApprove = !readOnlyProjectViewer && hasPermission(org, currentUser, "approve_work");
   const canAssign = !readOnlyProjectViewer && (hasPermission(org, currentUser, "assign_department_tasks") || hasPermission(org, currentUser, "assign_team_tasks"));
   const isAssignedToCurrentUser = (item.assigneeId ?? item.ownerId) === currentUser.id;
-  const canAccept = !item.archivedAt && !readOnlyProjectViewer && item.status === "new" && isAssignedToCurrentUser;
+  const acceptedForCurrentAssignment = item.acceptedAssigneeId === (item.assigneeId ?? item.ownerId);
+  const canAccept = !item.archivedAt && !readOnlyProjectViewer && item.status === "new" && isAssignedToCurrentUser && !acceptedForCurrentAssignment;
   const canWork = !item.archivedAt && !readOnlyProjectViewer && item.status !== "done" && (isAssignedToCurrentUser || item.ownerId === currentUser.id || canAssign);
   const canManageLifecycle = isBranchHead || (!isProject && isDepartmentHead && item.departmentId === currentUser.departmentId);
   const canReopen = canManageLifecycle && !item.archivedAt && item.status === "done";
