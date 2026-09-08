@@ -58,6 +58,25 @@ export type OrgState = {
 
 export const ORG_STORAGE_KEY = "rif-dimashq-communications-org-v1";
 
+export const SYSTEM_ADMIN_ID = "__system-administrator__";
+export const SYSTEM_ADMIN_USERNAME = "administrator";
+export const SYSTEM_ADMIN_ROLE: OrgRole = {
+  id: "role-system-administrator",
+  key: "branch_head",
+  name: "Administrator",
+  system: true,
+  permissions: ["manage_structure", "manage_users", "manage_roles", "view_all_tree", "view_team_tree", "create_projects", "create_tasks", "assign_department_tasks", "assign_team_tasks", "approve_work", "view_reports"],
+};
+export const SYSTEM_ADMIN_USER: OrgUser = {
+  id: SYSTEM_ADMIN_ID,
+  name: "Administrator",
+  username: SYSTEM_ADMIN_USERNAME,
+  password: "",
+  roleId: SYSTEM_ADMIN_ROLE.id,
+  title: "System Administrator",
+  active: true,
+};
+
 export const defaultRoles: OrgRole[] = [
   { id: "role-branch-head", key: "branch_head", name: "رئيس الفرع", system: true, permissions: ["manage_structure", "manage_users", "manage_roles", "view_all_tree", "create_projects", "create_tasks", "assign_department_tasks", "assign_team_tasks", "approve_work", "view_reports"] },
   { id: "role-department-head", key: "department_head", name: "رئيس قسم", system: true, permissions: ["view_team_tree", "create_tasks", "assign_team_tasks", "view_reports"] },
@@ -119,7 +138,9 @@ export function saveOrgState(state: OrgState) {
 }
 
 export function roleOf(state: OrgState, user?: OrgUser) {
-  return user ? state.roles.find((r) => r.id === user.roleId) : undefined;
+  if (!user) return undefined;
+  if (user.id === SYSTEM_ADMIN_ID) return SYSTEM_ADMIN_ROLE;
+  return state.roles.find((r) => r.id === user.roleId);
 }
 
 export function hasPermission(state: OrgState, user: OrgUser | undefined, permission: PermissionKey) {
