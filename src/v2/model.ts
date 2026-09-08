@@ -42,6 +42,9 @@ export type Assignment = {
   issuedById: string;
   ownerId?: string;
   assigneeId?: string;
+  archivedAt?: string;
+  archivedById?: string;
+  archivedPreviousStatus?: TaskStatus;
   updates: UpdateEntry[];
 };
 
