@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { STORAGE_KEY, makeSeedState, type AppState, type Assignment } from "../v2/model";
+import { STORAGE_KEY, makeSeedState, type AppState, type Assignment, type CallRequest, type Notice } from "../v2/model";
 import { ORG_STORAGE_KEY, loadOrgState, saveOrgState, type OrgState } from "./orgModel";
 
 const APP_CHANNEL = "rif-dimashq-command-center-app-v1";
@@ -50,6 +50,47 @@ function normalizeAppState(value: Partial<AppState> | AppState): AppState {
   };
 }
 
+function mergeNotices(remote: Notice[] = [], local: Notice[] = []) {
+  const byId = new Map<string, Notice>();
+  [...remote, ...local].forEach((notice) => {
+    const previous = byId.get(notice.id);
+    if (!previous || byTime(previous.at, notice.at) <= 0) byId.set(notice.id, notice);
+  });
+  return [...byId.values()].sort((a, b) => byTime(b.at, a.at));
+}
+
+function mergeCallRequests(remote: CallRequest[] = [], local: CallRequest[] = []) {
+  const byId = new Map<string, CallRequest>();
+  [...remote, ...local].forEach((request) => {
+    const previous = byId.get(request.id);
+    if (!previous) {
+      byId.set(request.id, request);
+      return;
+    }
+    const previousResolved = Boolean(previous.resolvedAt) || previous.active === false;
+    const requestResolved = Boolean(request.resolvedAt) || request.active === false;
+    if (requestResolved && !previousResolved) {
+      byId.set(request.id, request);
+      return;
+    }
+    if (requestResolved === previousResolved && byTime(previous.resolvedAt ?? previous.createdAt, request.resolvedAt ?? request.createdAt) <= 0) {
+      byId.set(request.id, request);
+    }
+  });
+  return [...byId.values()].sort((a, b) => byTime(b.createdAt, a.createdAt));
+}
+
+function mergeAppForSync(remoteValue: Partial<AppState> | AppState, localValue: Partial<AppState> | AppState): AppState {
+  const remote = normalizeAppState(remoteValue);
+  const local = normalizeAppState(localValue);
+  return {
+    ...remote,
+    currentUserId: local.currentUserId || remote.currentUserId,
+    notices: mergeNotices(remote.notices, local.notices),
+    callRequests: mergeCallRequests(remote.callRequests ?? [], local.callRequests ?? []),
+  };
+}
+
 function readStoredAppState(): AppState | null {
   if (typeof window === "undefined") return null;
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? normalizeAppState(JSON.parse(raw) as Partial<AppState>) : null; } catch { return null; }
@@ -64,12 +105,18 @@ async function pullRemote(): Promise<RemoteSnapshot | null> {
 
 async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
   const key = syncKey(); if (!key) return;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     const current = await pullRemote(); if (!current) return;
-    const payload: RemotePayload = { ...(current.payload ?? {}), [part]: value };
+    let nextValue: AppState | OrgState = value;
+    if (part === "app") {
+      const remoteApp = current.payload?.app;
+      nextValue = remoteApp ? mergeAppForSync(remoteApp, value as AppState) : normalizeAppState(value as AppState);
+    }
+    const payload: RemotePayload = { ...(current.payload ?? {}), [part]: nextValue };
     try {
       const res = await fetch(SYNC_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json", "x-workspace-key": key }, body: JSON.stringify({ payload, revision: current.revision ?? 0 }) });
-      if (res.ok) return; if (res.status !== 409) return;
+      if (res.ok) return;
+      if (res.status !== 409) return;
     } catch { return; }
   }
 }
@@ -89,13 +136,37 @@ export function useLiveAppState(): [AppState, Dispatch<SetStateAction<AppState>>
     const onStorage = (event: StorageEvent) => { if (event.key !== STORAGE_KEY || !event.newValue) return; try { setState(normalizeAppState(JSON.parse(event.newValue) as Partial<AppState>)); } catch { /* ignore */ } };
     window.addEventListener("storage", onStorage);
     let disposed = false;
-    const sync = async () => { const remote = await pullRemote(); if (disposed || !remote) return; if (remote.payload?.app) { const next = normalizeAppState(remote.payload.app); writeStoredAppState(next); setState(next); } else { await pushRemotePart("app", initial); } };
+    const sync = async () => {
+      const remote = await pullRemote();
+      if (disposed || !remote) return;
+      if (remote.payload?.app) {
+        const local = readStoredAppState() ?? initial;
+        const next = mergeAppForSync(remote.payload.app, local);
+        writeStoredAppState(next);
+        setState(next);
+        const remoteCalls = remote.payload.app.callRequests ?? [];
+        const remoteNotices = remote.payload.app.notices ?? [];
+        if (next.callRequests?.length !== remoteCalls.length || next.notices.length !== remoteNotices.length) {
+          void pushRemotePart("app", next);
+        }
+      } else {
+        await pushRemotePart("app", initial);
+      }
+    };
     void sync(); const timer = window.setInterval(() => void sync(), POLL_MS);
     return () => { disposed = true; window.clearInterval(timer); window.removeEventListener("storage", onStorage); channel?.close(); channelRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const setLiveState = useCallback<Dispatch<SetStateAction<AppState>>>((action) => {
-    setState((current) => { const base = readStoredAppState() ?? current; const proposed = typeof action === "function" ? action(base) : action; const next = normalizeAppState(proposed); writeStoredAppState(next); channelRef.current?.postMessage(next); void pushRemotePart("app", next); return next; });
+    setState((current) => {
+      const base = readStoredAppState() ?? current;
+      const proposed = typeof action === "function" ? action(base) : action;
+      const next = normalizeAppState(proposed);
+      writeStoredAppState(next);
+      channelRef.current?.postMessage(next);
+      void pushRemotePart("app", next);
+      return next;
+    });
   }, []);
   return [state, setLiveState];
 }
