@@ -19,7 +19,7 @@ function repairAssignment(input: Assignment): Assignment {
   const statusUpdates = updates
     .filter((u) => Boolean(u.status))
     .sort((a, b) => byTime(a.at, b.at));
-  const latestStatusUpdate = statusUpdates.at(-1);
+  const latestStatusUpdate = statusUpdates.length ? statusUpdates[statusUpdates.length - 1] : undefined;
   if (status === "new" && latestStatusUpdate?.status && latestStatusUpdate.status !== "new") {
     status = latestStatusUpdate.status;
   }
@@ -130,9 +130,9 @@ export function useLiveOrgState(): [OrgState, Dispatch<SetStateAction<OrgState>>
   }, []);
 
   const setLiveState = useCallback<Dispatch<SetStateAction<OrgState>>>((action) => {
-    setState((current) => {
+    setState(() => {
       const latest = loadOrgState();
-      const next = typeof action === "function" ? action(latest ?? current) : action;
+      const next = typeof action === "function" ? action(latest) : action;
       saveOrgState(next);
       channelRef.current?.postMessage(next);
       return next;
