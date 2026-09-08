@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BriefcaseBusiness, CheckCircle2, ChevronDown, ChevronUp, CircleDot, Clock3, Focus, ListTodo, Maximize2, Minimize2, Minus, Network, PhoneCall, Plus, Radio, UserRound, UsersRound } from "lucide-react";
 import { statusMeta, type Assignment, type CallRequest, type TaskStatus } from "../v2/model";
-import { descendants, roleOf, type OrgState, type OrgUser } from "./orgModel";
+import { SYSTEM_ADMIN_ID, SYSTEM_ADMIN_USER, descendants, roleOf, type OrgState, type OrgUser } from "./orgModel";
 import { useLiveAppState } from "./liveState";
 
 type Point = { x: number; y: number };
@@ -63,7 +63,7 @@ function callTargetFor(state: OrgState, user: OrgUser) {
 }
 
 export default function TeamTree({ state, items, currentUserId, onOpenItem }: { state: OrgState; items: Assignment[]; currentUserId: string; onOpenItem: (id: string) => void }) {
-  const current = state.users.find((u) => u.id === currentUserId);
+  const current = currentUserId === SYSTEM_ADMIN_ID ? SYSTEM_ADMIN_USER : state.users.find((u) => u.id === currentUserId);
   const [liveApp, setLiveApp] = useLiveAppState();
   const panelRef = useRef<HTMLElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
