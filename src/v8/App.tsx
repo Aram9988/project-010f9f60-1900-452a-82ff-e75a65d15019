@@ -8,7 +8,7 @@ import TeamTree from "./TeamTree";
 import WorkDetail from "./WorkDetail";
 import Reports from "./Reports";
 import LoginScreen from "./LoginScreen";
-import { descendants, hasPermission, roleOf, teamUserIds, type OrgState, type OrgUser } from "./orgModel";
+import { SYSTEM_ADMIN_ID, SYSTEM_ADMIN_USER, descendants, hasPermission, roleOf, teamUserIds, type OrgState, type OrgUser } from "./orgModel";
 import { useLiveAppState, useLiveOrgState } from "./liveState";
 
 const SESSION_KEY = "command-center-demo-session";
@@ -29,7 +29,7 @@ export default function App() {
   };
   const logout = () => { sessionStorage.removeItem(SESSION_KEY); setSessionUserId(null); };
 
-  const currentUser = sessionUserId ? org.users.find((u) => u.id === sessionUserId && u.active) : undefined;
+  const currentUser = sessionUserId === SYSTEM_ADMIN_ID ? SYSTEM_ADMIN_USER : sessionUserId ? org.users.find((u) => u.id === sessionUserId && u.active) : undefined;
   if (!currentUser) return <LoginScreen org={org} onLogin={login} />;
   return <Shell org={org} setOrg={setOrg} app={app} setApp={setApp} currentUser={currentUser} onLogout={logout} />;
 }
