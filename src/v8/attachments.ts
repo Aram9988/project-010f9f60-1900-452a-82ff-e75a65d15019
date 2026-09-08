@@ -3,6 +3,7 @@ import { WORKSPACE_SYNC_KEY_STORAGE } from "./liveState";
 
 const ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const ATTACHMENT_PREFIX = "__workspace_attachment_v1__:";
 
 function workspaceKey() {
   return typeof window === "undefined" ? "" : localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? "";
@@ -46,6 +47,24 @@ export async function openWorkspaceAttachment(attachment: AttachmentRef) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+export function serializeAttachment(value: AttachmentRef) {
+  return `${ATTACHMENT_PREFIX}${JSON.stringify(value)}`;
+}
+
+export function parseAttachment(value?: string | AttachmentRef): AttachmentRef | null {
+  if (!value) return null;
+  if (typeof value !== "string") return value;
+  if (!value.startsWith(ATTACHMENT_PREFIX)) return null;
+  try {
+    const parsed = JSON.parse(value.slice(ATTACHMENT_PREFIX.length)) as Partial<AttachmentRef>;
+    if (!parsed.path || !parsed.name) return null;
+    return { path: parsed.path, name: parsed.name, mime: parsed.mime, size: parsed.size };
+  } catch {
+    return null;
+  }
+}
+
 export function attachmentLabel(value: string | AttachmentRef) {
-  return typeof value === "string" ? value : value.name;
+  const parsed = parseAttachment(value);
+  return parsed?.name ?? (typeof value === "string" ? value : value.name);
 }
