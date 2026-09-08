@@ -44,13 +44,6 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
 
   useEffect(() => { localStorage.setItem(CALL_STORAGE_KEY, JSON.stringify(callRequests)); }, [callRequests]);
   useEffect(() => {
-    const reloadCalls = () => setCallRequests(loadCallRequests());
-    const onStorage = (event: StorageEvent) => { if (event.key === CALL_STORAGE_KEY) reloadCalls(); };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("workspace-call-sync", reloadCalls);
-    return () => { window.removeEventListener("storage", onStorage); window.removeEventListener("workspace-call-sync", reloadCalls); };
-  }, []);
-  useEffect(() => {
     const handleFullscreen = () => {
       const active = document.fullscreenElement === panelRef.current;
       setIsFullscreen(active);
@@ -91,9 +84,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
     if (currentRole?.key === "department_head") return branchHead?.id;
     if (currentRole?.key === "office_responsible") {
       const manager = state.users.find((u) => u.id === currentUser.managerId);
-      if (roleOf(state, manager)?.key === "department_head") return manager?.id;
-      const department = currentUser.departmentId ? state.departments.find((d) => d.id === currentUser.departmentId) : undefined;
-      if (department?.headUserId) return department.headUserId;
+      return roleOf(state, manager)?.key === "department_head" ? manager?.id : undefined;
     }
     return undefined;
   })();
@@ -120,7 +111,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
         <p className="mt-1 text-xs leading-6 text-slate-500">الموجة تبدأ من رئيس القسم وتتبع المسار الحقيقي حتى بطاقة الشخص صاحب العمل النشط. الأعمال غير المستلمة والمنتهية لا تولد موجة.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {allowedCallTarget && <button type="button" onClick={requestCall} disabled={activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget)} className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2 text-[10px] font-black text-amber-200 disabled:opacity-45"><PhoneCall size={14} />{activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget) ? "تم إرسال طلب الاتصال" : currentRole?.key === "office_responsible" ? "طلب اتصال من رئيس القسم" : "طلب اتصال من رئيس الفرع"}</button>}
+        {allowedCallTarget && <button type="button" onClick={requestCall} disabled={activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget)} className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2 text-[10px] font-black text-amber-200 disabled:opacity-45"><PhoneCall size={14} />{activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget) ? "تم إرسال طلب الاتصال" : "طلب اتصال من المسؤول"}</button>}
         <LiveStat label="الأفراد" value={visibleUsers.length} icon={<UsersRound size={14} />} />
         <LiveStat label="نشط الآن" value={workingCount} icon={<Radio size={14} />} active />
         {activeCalls.length > 0 && <LiveStat label="طلبات اتصال" value={activeCalls.length} icon={<PhoneCall size={14} />} warning />}
@@ -223,7 +214,7 @@ function PersonNode({ user, roleName, subtitle, activeItems, pendingItems, compl
       {otherOwnItems.length > 0 && <AssignmentGroup title="أعمال أخرى لرئيس القسم" items={otherOwnItems} state={state} onOpenItem={onOpenItem} accent="other" />}
     </> : <>
       <WorkSection title="الأعمال النشطة" count={activeItems.length} tone="active" items={activeItems} onOpenItem={onOpenItem} />
-      {pendingItems.length > 0 && <WorkSection title="بانتظار / غير نشط" count={pendingItems.length} tone="pending" items={pendingItems} onOpenItem={onOpenItem} />}
+      {pendingItems.length > 0 && <WorkSection title="بانتظار / غير نشط" count={pendingItems.length} tone="pending" items={pendingItems} onOpenItem={onOpenItem} />
       {completedItems.length > 0 && <WorkSection title="الأعمال المنتهية" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} />
     </>}
   </div>;
