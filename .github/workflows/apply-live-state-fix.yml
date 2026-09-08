@@ -1,0 +1,72 @@
+name: Apply live state consistency fix
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-live-state-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[live-state-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch application state logic
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          model = Path('src/v2/model.ts')
+          text = model.read_text()
+          old = '''  ownerId?: string;\n  assigneeId?: string;\n  archivedAt?: string;'''
+          new = '''  ownerId?: string;\n  assigneeId?: string;\n  acceptedAt?: string;\n  acceptedById?: string;\n  acceptedAssigneeId?: string;\n  archivedAt?: string;'''
+          if old not in text:
+              raise SystemExit('model insertion point not found')
+          model.write_text(text.replace(old, new, 1))
+
+          app = Path('src/v8/App.tsx')
+          text = app.read_text()
+          text = text.replace('import { useEffect, useMemo, useState } from "react";', 'import { useMemo, useState } from "react";', 1)
+          text = text.replace('import { STORAGE_KEY, makeSeedState, statusMeta, type AppState, type Assignment, type Priority, type TaskStatus, type UpdateEntry, type WorkType } from "../v2/model";', 'import { statusMeta, type AppState, type Assignment, type Priority, type TaskStatus, type UpdateEntry, type WorkType } from "../v2/model";', 1)
+          text = text.replace('import { descendants, hasPermission, loadOrgState, roleOf, saveOrgState, teamUserIds, type OrgState, type OrgUser } from "./orgModel";', 'import { descendants, hasPermission, roleOf, teamUserIds, type OrgState, type OrgUser } from "./orgModel";\nimport { useLiveAppState, useLiveOrgState } from "./liveState";', 1)
+          text, count = re.subn(r'function loadAppState\(\): AppState \{.*?\n\}\n\nexport default function App\(\)', 'export default function App()', text, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit('loadAppState block not found')
+          text = text.replace('  const [org, setOrg] = useState<OrgState>(() => loadOrgState());\n  const [app, setApp] = useState<AppState>(() => loadAppState());', '  const [org, setOrg] = useLiveOrgState();\n  const [app, setApp] = useLiveAppState();', 1)
+          text = text.replace('\n  useEffect(() => saveOrgState(org), [org]);\n  useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(app)), [app]);\n', '\n', 1)
+
+          old_update = 'setApp((s) => ({ ...s, tasks: s.tasks.map((x) => x.id === item.id ? { ...x, status: status ?? x.status, updatedAt: at, updates: [...x.updates, update] } : x) }));'
+          new_update = 'setApp((s) => ({ ...s, tasks: s.tasks.map((x) => x.id === item.id ? { ...x, status: status ?? x.status, acceptedAt: status === "active" ? at : x.acceptedAt, acceptedById: status === "active" ? currentUser.id : x.acceptedById, acceptedAssigneeId: status === "active" ? (x.assigneeId ?? x.ownerId) : x.acceptedAssigneeId, updatedAt: at, updates: [...x.updates, update] } : x) }));'
+          if old_update not in text:
+              raise SystemExit('updateItem mutation not found')
+          text = text.replace(old_update, new_update, 1)
+
+          old_assign = '{ ...x, assigneeId, departmentId: assignee.departmentId ?? x.departmentId, status: "new", updatedAt: at, updates:'
+          new_assign = '{ ...x, assigneeId, departmentId: assignee.departmentId ?? x.departmentId, status: "new", acceptedAt: undefined, acceptedById: undefined, acceptedAssigneeId: undefined, updatedAt: at, updates:'
+          if old_assign not in text:
+              raise SystemExit('assignment mutation not found')
+          text = text.replace(old_assign, new_assign, 1)
+          app.write_text(text)
+
+          detail = Path('src/v8/WorkDetail.tsx')
+          text = detail.read_text()
+          old = '''  const isAssignedToCurrentUser = (item.assigneeId ?? item.ownerId) === currentUser.id;\n  const canAccept = !item.archivedAt && !readOnlyProjectViewer && item.status === "new" && isAssignedToCurrentUser;'''
+          new = '''  const isAssignedToCurrentUser = (item.assigneeId ?? item.ownerId) === currentUser.id;\n  const acceptedForCurrentAssignment = item.acceptedAssigneeId === (item.assigneeId ?? item.ownerId);\n  const canAccept = !item.archivedAt && !readOnlyProjectViewer && item.status === "new" && isAssignedToCurrentUser && !acceptedForCurrentAssignment;'''
+          if old not in text:
+              raise SystemExit('canAccept block not found')
+          detail.write_text(text.replace(old, new, 1))
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/v2/model.ts src/v8/App.tsx src/v8/WorkDetail.tsx
+          git diff --cached --check
+          git commit -m "Fix stale acceptance state and live browser sync [live-state-applied]"
+          git push
