@@ -4,6 +4,7 @@ import { ORG_STORAGE_KEY, loadOrgState, saveOrgState, type OrgState } from "./or
 
 const APP_CHANNEL = "rif-dimashq-command-center-app-v1";
 const ORG_CHANNEL = "rif-dimashq-command-center-org-v1";
+const CALL_STORAGE_KEY = "rif-dimashq-call-requests-v1";
 export const WORKSPACE_SYNC_KEY_STORAGE = "rif-dimashq-workspace-sync-key-v1";
 const SYNC_ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
 const POLL_MS = 2000;
@@ -91,6 +92,56 @@ function mergeAppForSync(remoteValue: Partial<AppState> | AppState, localValue: 
   };
 }
 
+function readCallStorage(): CallRequest[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CALL_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as CallRequest[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCallStorage(calls: CallRequest[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(CALL_STORAGE_KEY, JSON.stringify(calls));
+  window.dispatchEvent(new Event("workspace-call-sync"));
+}
+
+function mergeTreeCallsIntoApp(appValue: AppState): AppState {
+  const treeCalls = readCallStorage();
+  if (!treeCalls.length) return appValue;
+  const existingById = new Map((appValue.callRequests ?? []).map((call) => [call.id, call]));
+  const newNotices: Notice[] = [];
+
+  treeCalls.forEach((call) => {
+    const existing = existingById.get(call.id);
+    if (!existing) {
+      newNotices.push({
+        id: `notice-${call.id}`,
+        userId: call.toUserId,
+        text: "لديك طلب اتصال جديد.",
+        at: call.createdAt,
+        read: false,
+      });
+    } else if (existing.active && call.active === false) {
+      newNotices.push({
+        id: `notice-resolved-${call.id}`,
+        userId: call.fromUserId,
+        text: "تم إنهاء طلب الاتصال.",
+        at: new Date().toISOString(),
+        read: false,
+      });
+    }
+  });
+
+  return {
+    ...appValue,
+    callRequests: mergeCallRequests(appValue.callRequests ?? [], treeCalls),
+    notices: mergeNotices(appValue.notices, newNotices),
+  };
+}
+
 function readStoredAppState(): AppState | null {
   if (typeof window === "undefined") return null;
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? normalizeAppState(JSON.parse(raw) as Partial<AppState>) : null; } catch { return null; }
@@ -109,8 +160,9 @@ async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
     const current = await pullRemote(); if (!current) return;
     let nextValue: AppState | OrgState = value;
     if (part === "app") {
+      const localApp = mergeTreeCallsIntoApp(value as AppState);
       const remoteApp = current.payload?.app;
-      nextValue = remoteApp ? mergeAppForSync(remoteApp, value as AppState) : normalizeAppState(value as AppState);
+      nextValue = remoteApp ? mergeAppForSync(remoteApp, localApp) : normalizeAppState(localApp);
     }
     const payload: RemotePayload = { ...(current.payload ?? {}), [part]: nextValue };
     try {
@@ -127,26 +179,49 @@ export async function verifyWorkspaceSyncKey(key: string) {
 export function isWorkspaceSyncConfigured() { return Boolean(syncKey()); }
 
 export function useLiveAppState(): [AppState, Dispatch<SetStateAction<AppState>>] {
-  const [state, setState] = useState<AppState>(() => readStoredAppState() ?? normalizeAppState(makeSeedState()));
+  const [state, setState] = useState<AppState>(() => mergeTreeCallsIntoApp(readStoredAppState() ?? normalizeAppState(makeSeedState())));
   const channelRef = useRef<BroadcastChannel | null>(null);
   useEffect(() => {
-    const initial = readStoredAppState() ?? state; writeStoredAppState(initial); setState(initial);
+    const initial = mergeTreeCallsIntoApp(readStoredAppState() ?? state);
+    writeStoredAppState(initial);
+    writeCallStorage(initial.callRequests ?? []);
+    setState(initial);
     const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(APP_CHANNEL) : null; channelRef.current = channel;
-    if (channel) channel.onmessage = (event) => setState(normalizeAppState(event.data as AppState));
-    const onStorage = (event: StorageEvent) => { if (event.key !== STORAGE_KEY || !event.newValue) return; try { setState(normalizeAppState(JSON.parse(event.newValue) as Partial<AppState>)); } catch { /* ignore */ } };
+    if (channel) channel.onmessage = (event) => {
+      const next = normalizeAppState(event.data as AppState);
+      writeCallStorage(next.callRequests ?? []);
+      setState(next);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY && event.newValue) {
+        try {
+          const next = normalizeAppState(JSON.parse(event.newValue) as Partial<AppState>);
+          writeCallStorage(next.callRequests ?? []);
+          setState(next);
+        } catch { /* ignore */ }
+      }
+      if (event.key === CALL_STORAGE_KEY) {
+        const base = readStoredAppState() ?? initial;
+        const next = mergeTreeCallsIntoApp(base);
+        writeStoredAppState(next);
+        setState(next);
+        void pushRemotePart("app", next);
+      }
+    };
     window.addEventListener("storage", onStorage);
     let disposed = false;
     const sync = async () => {
       const remote = await pullRemote();
       if (disposed || !remote) return;
       if (remote.payload?.app) {
-        const local = readStoredAppState() ?? initial;
+        const local = mergeTreeCallsIntoApp(readStoredAppState() ?? initial);
         const next = mergeAppForSync(remote.payload.app, local);
         writeStoredAppState(next);
+        writeCallStorage(next.callRequests ?? []);
         setState(next);
         const remoteCalls = remote.payload.app.callRequests ?? [];
         const remoteNotices = remote.payload.app.notices ?? [];
-        if (next.callRequests?.length !== remoteCalls.length || next.notices.length !== remoteNotices.length) {
+        if (JSON.stringify(next.callRequests ?? []) !== JSON.stringify(remoteCalls) || next.notices.length !== remoteNotices.length) {
           void pushRemotePart("app", next);
         }
       } else {
@@ -159,10 +234,11 @@ export function useLiveAppState(): [AppState, Dispatch<SetStateAction<AppState>>
   }, []);
   const setLiveState = useCallback<Dispatch<SetStateAction<AppState>>>((action) => {
     setState((current) => {
-      const base = readStoredAppState() ?? current;
+      const base = mergeTreeCallsIntoApp(readStoredAppState() ?? current);
       const proposed = typeof action === "function" ? action(base) : action;
-      const next = normalizeAppState(proposed);
+      const next = mergeTreeCallsIntoApp(normalizeAppState(proposed));
       writeStoredAppState(next);
+      writeCallStorage(next.callRequests ?? []);
       channelRef.current?.postMessage(next);
       void pushRemotePart("app", next);
       return next;
