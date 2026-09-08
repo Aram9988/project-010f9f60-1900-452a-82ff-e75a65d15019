@@ -217,9 +217,8 @@ function Composer({ item, currentUser, onUpdate }: { item: Assignment; currentUs
   if (item.status === "done") return <div className="mt-6 rounded-xl border border-emerald-300/12 bg-emerald-300/5 p-3 text-[11px] font-bold text-emerald-300">العمل مكتمل.</div>;
 
   function pick(e: ChangeEvent<HTMLInputElement>) {
-    const selected = e.target.files?.[0] ?? null;
-    setFile(selected);
-    setError(selected && selected.size > 25 * 1024 * 1024 ? "الحد الأقصى للمرفق هو 25 MB." : "");
+    setFile(e.target.files?.[0] ?? null);
+    setError("");
   }
 
   async function submit() {
@@ -235,18 +234,18 @@ function Composer({ item, currentUser, onUpdate }: { item: Assignment; currentUs
       setText(""); setFile(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "upload_failed";
-      setError(message === "file_too_large" ? "الحد الأقصى للمرفق هو 25 MB." : message === "workspace_not_connected" ? "يجب ربط الجهاز بمساحة العمل المشتركة قبل رفع المرفقات." : "فشل رفع المرفق إلى قاعدة البيانات. حاول مرة أخرى.");
+      setError(message === "workspace_not_connected" ? "يجب ربط الجهاز بمساحة العمل المشتركة قبل رفع المرفقات." : "فشل رفع المرفق. تحقق من الاتصال وحاول مرة أخرى.");
     } finally { setSending(false); }
   }
 
   return <div className="mt-6 rounded-2xl border border-white/8 bg-black/10 p-3">
     <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder={`أضف تحديثاً باسم ${currentUser.name}...`} className="w-full resize-none bg-transparent p-2 text-sm outline-none" />
     <div className="flex flex-col gap-2 border-t border-white/7 pt-3 sm:flex-row">
-      <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/8 px-3 py-2 text-[10px] text-slate-500"><Paperclip size={13} />{file?.name || "إرفاق ملف"}<input type="file" className="hidden" onChange={pick} /></label>
+      <label className="flex min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-white/8 px-3 py-2 text-[10px] text-slate-500"><Paperclip size={13} className="shrink-0" /><span className="truncate">{file?.name || "إرفاق ملف"}</span><input type="file" className="hidden" onChange={pick} /></label>
       {file && <button type="button" onClick={() => setFile(null)} className="rounded-xl border border-white/7 px-3 py-2 text-[9px] text-slate-500">إزالة المرفق</button>}
-      <button type="button" disabled={sending || !!error || (!text.trim() && !file)} onClick={submit} className="mr-auto flex h-9 items-center gap-2 rounded-xl bg-cyan-300 px-4 text-[10px] font-black text-slate-950 disabled:opacity-40">{sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}{sending ? "جارٍ الرفع..." : "إرسال التحديث"}</button>
+      <button type="button" disabled={sending || !!error || (!text.trim() && !file)} onClick={submit} className="mr-auto flex h-9 items-center gap-2 rounded-xl bg-cyan-300 px-4 text-[10px] font-black text-slate-950 disabled:opacity-40">{sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}{sending ? "جارٍ رفع الملف..." : "إرسال التحديث"}</button>
     </div>
     {error && <div className="mt-2 text-[9px] font-bold text-rose-300">{error}</div>}
-    <div className="mt-2 text-[8px] text-slate-700">المرفقات الجديدة تحفظ في التخزين المشترك وتفتح من أي جهاز مرتبط بالمنظومة.</div>
+    <div className="mt-2 text-[8px] leading-4 text-slate-700">PDF والصور وبقية أنواع الملفات مدعومة. الملفات الكبيرة ترفع على أجزاء قابلة للاستئناف إلى التخزين المشترك.</div>
   </div>;
 }
