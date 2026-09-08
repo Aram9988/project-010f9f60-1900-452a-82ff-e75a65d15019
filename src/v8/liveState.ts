@@ -11,9 +11,7 @@ const POLL_MS = 2000;
 type RemotePayload = { app?: AppState; org?: OrgState };
 type RemoteSnapshot = { payload?: RemotePayload; revision?: number; updated_at?: string; error?: string };
 
-function byTime(a: string | undefined, b: string | undefined) {
-  return (a ?? "").localeCompare(b ?? "");
-}
+function byTime(a: string | undefined, b: string | undefined) { return (a ?? "").localeCompare(b ?? ""); }
 
 function repairAssignment(input: Assignment): Assignment {
   const updates = Array.isArray(input.updates) ? [...input.updates] : [];
@@ -27,7 +25,8 @@ function repairAssignment(input: Assignment): Assignment {
   const acceptedForCurrentAssignee = input.acceptedAssigneeId === assigneeId;
   if (status === "new" && acceptedForCurrentAssignee) status = "active";
 
-  const accepted = status !== "new";
+  const acceptanceRequired = status === "new" || status === "returned";
+  const accepted = !acceptanceRequired;
   return {
     ...input,
     kind: input.kind ?? "task",
@@ -47,173 +46,76 @@ function normalizeAppState(value: Partial<AppState> | AppState): AppState {
     currentUserId: value.currentUserId || seed.currentUserId,
     tasks: Array.isArray(value.tasks) ? value.tasks.map(repairAssignment) : seed.tasks.map(repairAssignment),
     notices: Array.isArray(value.notices) ? value.notices : seed.notices,
+    callRequests: Array.isArray(value.callRequests) ? value.callRequests : [],
   };
 }
 
 function readStoredAppState(): AppState | null {
   if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? normalizeAppState(JSON.parse(raw) as Partial<AppState>) : null;
-  } catch { return null; }
+  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? normalizeAppState(JSON.parse(raw) as Partial<AppState>) : null; } catch { return null; }
 }
-
-function writeStoredAppState(state: AppState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-function syncKey() {
-  return typeof window === "undefined" ? "" : localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? "";
-}
+function writeStoredAppState(state: AppState) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function syncKey() { return typeof window === "undefined" ? "" : localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? ""; }
 
 async function pullRemote(): Promise<RemoteSnapshot | null> {
-  const key = syncKey();
-  if (!key) return null;
-  try {
-    const res = await fetch(SYNC_ENDPOINT, { headers: { "x-workspace-key": key } });
-    if (!res.ok) return null;
-    return await res.json() as RemoteSnapshot;
-  } catch { return null; }
+  const key = syncKey(); if (!key) return null;
+  try { const res = await fetch(SYNC_ENDPOINT, { headers: { "x-workspace-key": key } }); if (!res.ok) return null; return await res.json() as RemoteSnapshot; } catch { return null; }
 }
 
 async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
-  const key = syncKey();
-  if (!key) return;
+  const key = syncKey(); if (!key) return;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const current = await pullRemote();
-    if (!current) return;
+    const current = await pullRemote(); if (!current) return;
     const payload: RemotePayload = { ...(current.payload ?? {}), [part]: value };
     try {
-      const res = await fetch(SYNC_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-workspace-key": key },
-        body: JSON.stringify({ payload, revision: current.revision ?? 0 }),
-      });
-      if (res.ok) return;
-      if (res.status !== 409) return;
+      const res = await fetch(SYNC_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json", "x-workspace-key": key }, body: JSON.stringify({ payload, revision: current.revision ?? 0 }) });
+      if (res.ok) return; if (res.status !== 409) return;
     } catch { return; }
   }
 }
 
 export async function verifyWorkspaceSyncKey(key: string) {
-  try {
-    const res = await fetch(SYNC_ENDPOINT, { headers: { "x-workspace-key": key.trim() } });
-    return res.ok;
-  } catch { return false; }
+  try { const res = await fetch(SYNC_ENDPOINT, { headers: { "x-workspace-key": key.trim() } }); return res.ok; } catch { return false; }
 }
-
-export function isWorkspaceSyncConfigured() {
-  return Boolean(syncKey());
-}
+export function isWorkspaceSyncConfigured() { return Boolean(syncKey()); }
 
 export function useLiveAppState(): [AppState, Dispatch<SetStateAction<AppState>>] {
   const [state, setState] = useState<AppState>(() => readStoredAppState() ?? normalizeAppState(makeSeedState()));
   const channelRef = useRef<BroadcastChannel | null>(null);
-
   useEffect(() => {
-    const initial = readStoredAppState() ?? state;
-    writeStoredAppState(initial);
-    setState(initial);
-
-    const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(APP_CHANNEL) : null;
-    channelRef.current = channel;
+    const initial = readStoredAppState() ?? state; writeStoredAppState(initial); setState(initial);
+    const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(APP_CHANNEL) : null; channelRef.current = channel;
     if (channel) channel.onmessage = (event) => setState(normalizeAppState(event.data as AppState));
-
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY || !event.newValue) return;
-      try { setState(normalizeAppState(JSON.parse(event.newValue) as Partial<AppState>)); } catch { /* ignore */ }
-    };
+    const onStorage = (event: StorageEvent) => { if (event.key !== STORAGE_KEY || !event.newValue) return; try { setState(normalizeAppState(JSON.parse(event.newValue) as Partial<AppState>)); } catch { /* ignore */ } };
     window.addEventListener("storage", onStorage);
-
     let disposed = false;
-    const sync = async () => {
-      const remote = await pullRemote();
-      if (disposed || !remote) return;
-      if (remote.payload?.app) {
-        const next = normalizeAppState(remote.payload.app);
-        writeStoredAppState(next);
-        setState(next);
-      } else {
-        await pushRemotePart("app", initial);
-      }
-    };
-    void sync();
-    const timer = window.setInterval(() => void sync(), POLL_MS);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-      window.removeEventListener("storage", onStorage);
-      channel?.close();
-      channelRef.current = null;
-    };
+    const sync = async () => { const remote = await pullRemote(); if (disposed || !remote) return; if (remote.payload?.app) { const next = normalizeAppState(remote.payload.app); writeStoredAppState(next); setState(next); } else { await pushRemotePart("app", initial); } };
+    void sync(); const timer = window.setInterval(() => void sync(), POLL_MS);
+    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener("storage", onStorage); channel?.close(); channelRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   const setLiveState = useCallback<Dispatch<SetStateAction<AppState>>>((action) => {
-    setState((current) => {
-      const base = readStoredAppState() ?? current;
-      const proposed = typeof action === "function" ? action(base) : action;
-      const next = normalizeAppState(proposed);
-      writeStoredAppState(next);
-      channelRef.current?.postMessage(next);
-      void pushRemotePart("app", next);
-      return next;
-    });
+    setState((current) => { const base = readStoredAppState() ?? current; const proposed = typeof action === "function" ? action(base) : action; const next = normalizeAppState(proposed); writeStoredAppState(next); channelRef.current?.postMessage(next); void pushRemotePart("app", next); return next; });
   }, []);
-
   return [state, setLiveState];
 }
 
 export function useLiveOrgState(): [OrgState, Dispatch<SetStateAction<OrgState>>] {
   const [state, setState] = useState<OrgState>(() => loadOrgState());
   const channelRef = useRef<BroadcastChannel | null>(null);
-
   useEffect(() => {
     const initial = loadOrgState();
-    const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(ORG_CHANNEL) : null;
-    channelRef.current = channel;
+    const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(ORG_CHANNEL) : null; channelRef.current = channel;
     if (channel) channel.onmessage = (event) => setState(event.data as OrgState);
-
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== ORG_STORAGE_KEY || !event.newValue) return;
-      try { setState(JSON.parse(event.newValue) as OrgState); } catch { /* ignore */ }
-    };
+    const onStorage = (event: StorageEvent) => { if (event.key !== ORG_STORAGE_KEY || !event.newValue) return; try { setState(JSON.parse(event.newValue) as OrgState); } catch { /* ignore */ } };
     window.addEventListener("storage", onStorage);
-
     let disposed = false;
-    const sync = async () => {
-      const remote = await pullRemote();
-      if (disposed || !remote) return;
-      if (remote.payload?.org) {
-        saveOrgState(remote.payload.org);
-        setState(remote.payload.org);
-      } else {
-        await pushRemotePart("org", initial);
-      }
-    };
-    void sync();
-    const timer = window.setInterval(() => void sync(), POLL_MS);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-      window.removeEventListener("storage", onStorage);
-      channel?.close();
-      channelRef.current = null;
-    };
+    const sync = async () => { const remote = await pullRemote(); if (disposed || !remote) return; if (remote.payload?.org) { saveOrgState(remote.payload.org); setState(remote.payload.org); } else { await pushRemotePart("org", initial); } };
+    void sync(); const timer = window.setInterval(() => void sync(), POLL_MS);
+    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener("storage", onStorage); channel?.close(); channelRef.current = null; };
   }, []);
-
   const setLiveState = useCallback<Dispatch<SetStateAction<OrgState>>>((action) => {
-    setState((current) => {
-      const latest = loadOrgState() ?? current;
-      const next = typeof action === "function" ? action(latest) : action;
-      saveOrgState(next);
-      channelRef.current?.postMessage(next);
-      void pushRemotePart("org", next);
-      return next;
-    });
+    setState((current) => { const latest = loadOrgState() ?? current; const next = typeof action === "function" ? action(latest) : action; saveOrgState(next); channelRef.current?.postMessage(next); void pushRemotePart("org", next); return next; });
   }, []);
-
   return [state, setLiveState];
 }
