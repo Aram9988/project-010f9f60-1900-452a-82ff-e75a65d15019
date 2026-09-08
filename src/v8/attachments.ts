@@ -2,28 +2,134 @@ import type { AttachmentRef } from "../v2/model";
 import { WORKSPACE_SYNC_KEY_STORAGE } from "./liveState";
 
 const ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const ATTACHMENT_PREFIX = "__workspace_attachment_v1__:";
+const TUS_VERSION = "1.0.0";
+const TUS_CHUNK_BYTES = 6 * 1024 * 1024;
 
 function workspaceKey() {
   return typeof window === "undefined" ? "" : localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? "";
 }
 
+function utf8Base64(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function metadata(values: Record<string, string>) {
+  return Object.entries(values).map(([key, value]) => `${key} ${utf8Base64(value)}`).join(",");
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+type SignedUpload = {
+  path: string;
+  name: string;
+  mime: string;
+  size: number;
+  token: string;
+  tusEndpoint: string;
+  bucket: string;
+};
+
+async function getSignedUpload(file: File, key: string): Promise<SignedUpload> {
+  const params = new URLSearchParams({
+    attachment: "sign-upload",
+    name: file.name || "attachment",
+    mime: file.type || "application/octet-stream",
+    size: String(file.size),
+  });
+  const res = await fetch(`${ENDPOINT}?${params.toString()}`, {
+    method: "POST",
+    headers: { "x-workspace-key": key },
+  });
+  if (!res.ok) throw new Error(`sign_upload_failed_${res.status}`);
+  return await res.json() as SignedUpload;
+}
+
+async function recoverOffset(uploadUrl: string, token: string) {
+  const res = await fetch(uploadUrl, {
+    method: "HEAD",
+    headers: { "Tus-Resumable": TUS_VERSION, "x-signature": token },
+  });
+  if (!res.ok) return null;
+  const value = Number(res.headers.get("Upload-Offset") ?? "");
+  return Number.isFinite(value) ? value : null;
+}
+
+async function uploadResumable(file: File, signed: SignedUpload) {
+  const createRes = await fetch(signed.tusEndpoint, {
+    method: "POST",
+    headers: {
+      "Tus-Resumable": TUS_VERSION,
+      "Upload-Length": String(file.size),
+      "Upload-Metadata": metadata({
+        bucketName: signed.bucket,
+        objectName: signed.path,
+        contentType: file.type || "application/octet-stream",
+        cacheControl: "3600",
+      }),
+      "x-signature": signed.token,
+      "x-upsert": "false",
+    },
+  });
+  if (!createRes.ok) throw new Error(`tus_create_failed_${createRes.status}`);
+
+  const location = createRes.headers.get("Location");
+  if (!location) throw new Error("tus_location_missing");
+  const uploadUrl = new URL(location, signed.tusEndpoint).toString();
+  let offset = 0;
+
+  while (offset < file.size) {
+    const chunk = file.slice(offset, Math.min(file.size, offset + TUS_CHUNK_BYTES));
+    let uploaded = false;
+
+    for (let attempt = 0; attempt < 5 && !uploaded; attempt += 1) {
+      try {
+        const res = await fetch(uploadUrl, {
+          method: "PATCH",
+          headers: {
+            "Tus-Resumable": TUS_VERSION,
+            "Upload-Offset": String(offset),
+            "Content-Type": "application/offset+octet-stream",
+            "x-signature": signed.token,
+          },
+          body: chunk,
+        });
+        if (res.ok) {
+          const nextOffset = Number(res.headers.get("Upload-Offset") ?? offset + chunk.size);
+          offset = Number.isFinite(nextOffset) ? nextOffset : offset + chunk.size;
+          uploaded = true;
+          continue;
+        }
+      } catch {
+        // Recover from the server offset below. This prevents duplicate chunks if a response was lost.
+      }
+
+      const recovered = await recoverOffset(uploadUrl, signed.token);
+      if (recovered !== null && recovered !== offset) {
+        offset = recovered;
+        uploaded = true;
+        continue;
+      }
+      await wait(600 * (attempt + 1));
+    }
+
+    if (!uploaded) throw new Error("tus_chunk_failed");
+  }
+}
+
 export async function uploadWorkspaceAttachment(file: File): Promise<AttachmentRef> {
   if (!file.size) throw new Error("empty_file");
-  if (file.size > MAX_ATTACHMENT_BYTES) throw new Error("file_too_large");
   const key = workspaceKey();
   if (!key) throw new Error("workspace_not_connected");
 
-  const form = new FormData();
-  form.append("file", file, file.name);
-  const res = await fetch(`${ENDPOINT}?attachment=upload`, {
-    method: "POST",
-    headers: { "x-workspace-key": key },
-    body: form,
-  });
-  if (!res.ok) throw new Error(`upload_failed_${res.status}`);
-  return await res.json() as AttachmentRef;
+  const signed = await getSignedUpload(file, key);
+  await uploadResumable(file, signed);
+  return { path: signed.path, name: signed.name, mime: signed.mime, size: file.size };
 }
 
 export async function openWorkspaceAttachment(attachment: AttachmentRef) {
