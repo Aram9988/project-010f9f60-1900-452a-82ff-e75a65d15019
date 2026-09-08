@@ -3,21 +3,34 @@ import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { SYSTEM_ADMIN_ID, SYSTEM_ADMIN_USERNAME, type OrgState } from "./orgModel";
 import BranchEmblem from "./BranchEmblem";
 
-const WORKSPACE_SYNC_KEY_STORAGE = "rif-dimashq-workspace-sync-key-v1";
+const SYSTEM_ADMIN_PASSWORD_SHA256 = "bfb4682727963b5021f826fe22624d6e62e1779f92c5ec5217b4e73486595300";
+
+async function sha256(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 export default function LoginScreen({ org, onLogin }: { org: OrgState; onLogin: (userId: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     const normalizedUsername = username.trim().toLowerCase();
-    const workspaceKey = typeof window !== "undefined" ? localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? "" : "";
-    if (normalizedUsername === SYSTEM_ADMIN_USERNAME && Boolean(workspaceKey) && password === workspaceKey) {
-      setError(false);
-      onLogin(SYSTEM_ADMIN_ID);
-      return;
+    if (normalizedUsername === SYSTEM_ADMIN_USERNAME) {
+      try {
+        const passwordHash = await sha256(password);
+        if (passwordHash === SYSTEM_ADMIN_PASSWORD_SHA256) {
+          setError(false);
+          onLogin(SYSTEM_ADMIN_ID);
+          return;
+        }
+      } catch {
+        setError(true);
+        return;
+      }
     }
     const user = org.users.find((u) => u.active && u.username.toLowerCase() === normalizedUsername && u.password === password);
     if (!user) { setError(true); return; }
