@@ -51,6 +51,7 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
   const acceptedForCurrentAssignment = item.acceptedAssigneeId === (item.assigneeId ?? item.ownerId);
   const canAccept = !item.archivedAt && !readOnlyProjectViewer && item.status === "new" && isAssignedToCurrentUser && !acceptedForCurrentAssignment;
   const canWork = !item.archivedAt && !readOnlyProjectViewer && item.status !== "done" && (isAssignedToCurrentUser || item.ownerId === currentUser.id || canAssign);
+  const officeCanComplete = !isProject && isOfficeResponsible && isAssignedToCurrentUser && canWork && ["active", "waiting", "returned"].includes(item.status);
   const canManageLifecycle = isBranchHead || (!isProject && isDepartmentHead && item.departmentId === currentUser.departmentId);
   const canReopen = canManageLifecycle && !item.archivedAt && item.status === "done";
 
@@ -84,11 +85,13 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
           <div className="mt-4 flex flex-wrap items-center gap-3"><StatusChip status={item.status} /><span className="text-[10px] text-slate-600">الأولوية</span><PriorityChip value={item.priority} /><span className="hidden h-4 w-px bg-white/8 sm:block" /><span className="text-[10px] text-slate-500">المسند إليه: <b className="text-slate-300">{assignee?.name ?? owner?.name ?? "غير محدد"}</b></span></div>
           {item.status === "new" && !item.archivedAt && <div className="mt-4 inline-flex rounded-xl border border-cyan-300/12 bg-cyan-300/[0.035] px-3 py-2 text-[10px] font-bold text-cyan-200">بانتظار استلام {assignee?.name ?? owner?.name ?? "المسؤول"}. لن يظهر النبض الحي قبل تأكيد الاستلام.</div>}
           {readOnlyProjectViewer && <div className="mt-4 rounded-xl border border-indigo-300/12 bg-indigo-300/[0.035] px-3 py-2 text-[10px] font-bold leading-5 text-indigo-200">عرض المشروع متاح لمسؤول المكتب للمتابعة فقط. يمكنك قراءة تحديثات رئيس الفرع ورئيس القسم، لكن لا يمكنك إضافة تحديث أو تغيير حالة المشروع.</div>}
+          {isOfficeResponsible && !isProject && <div className="mt-4 rounded-xl border border-emerald-300/12 bg-emerald-300/[0.035] px-3 py-2 text-[10px] font-bold leading-5 text-emerald-200">عند إنهاء المهمة اضغط «تم الإنجاز». سيتم إنهاء المهمة مباشرة وإشعار رئيس القسم، ولا يظهر لمسؤول المكتب زر «إرسال للاعتماد».</div>}
           {item.archivedAt && <div className="mt-4 rounded-xl border border-slate-400/12 bg-slate-400/[0.035] px-3 py-2 text-[10px] font-bold text-slate-400">تمت أرشفة هذا العمل بتاريخ {fmt(item.archivedAt)}. لا يظهر كنشاط حي حتى تتم استعادته.</div>}
         </div>
         <div className="flex flex-wrap gap-2">
           {canAccept && <Primary onClick={() => onTransition(item, "active", `تم استلام ${noun} وبدء التنفيذ. أصبحت الحالة نشطة.`)}>تأكيد الاستلام وبدء التنفيذ</Primary>}
-          {canWork && ["active", "waiting", "returned"].includes(item.status) && <Primary onClick={() => onTransition(item, "review", `تم إرسال ${noun} للاعتماد.`)}>إرسال للاعتماد</Primary>}
+          {canWork && !isOfficeResponsible && ["active", "waiting", "returned"].includes(item.status) && <Primary onClick={() => onTransition(item, "review", `تم إرسال ${noun} للاعتماد.`)}>إرسال للاعتماد</Primary>}
+          {officeCanComplete && <Primary onClick={() => onTransition(item, "done", "تم إنجاز المهمة من قبل مسؤول المكتب وإبلاغ رئيس القسم.")}><CheckCircle2 size={14} />تم الإنجاز</Primary>}
           {canApprove && !item.archivedAt && item.status !== "done" && item.status !== "new" && <Primary onClick={() => onTransition(item, "done", `تم اعتماد ${noun} وإنهاؤه.`)}><CheckCircle2 size={14} />اعتماد وإنهاء</Primary>}
           {canApprove && !item.archivedAt && item.status === "review" && <button onClick={() => onTransition(item, "returned", `أعيد ${noun} للتعديل.`)} className="h-10 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 text-[11px] font-bold text-rose-300">إعادة للتعديل</button>}
           {canReopen && <button onClick={() => onReopen(item)} className="flex h-10 items-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/5 px-3 text-[11px] font-bold text-emerald-300"><RotateCcw size={13} />إعادة تفعيل</button>}
@@ -134,7 +137,7 @@ function Primary({ onClick, children }: { onClick: () => void; children: React.R
 
 function Composer({ item, currentUser, onUpdate }: { item: Assignment; currentUser: OrgUser; onUpdate: (item: Assignment, text: string, status?: TaskStatus, attachment?: string) => void }) {
   const [text, setText] = useState(""); const [file, setFile] = useState("");
-  if (item.status === "done") return <div className="mt-6 rounded-xl border border-emerald-300/12 bg-emerald-300/5 p-3 text-[11px] font-bold text-emerald-300">العمل مكتمل ومعتمد. يمكن للمستخدم المخول إعادة تفعيله عند الحاجة.</div>;
+  if (item.status === "done") return <div className="mt-6 rounded-xl border border-emerald-300/12 bg-emerald-300/5 p-3 text-[11px] font-bold text-emerald-300">العمل مكتمل. يمكن للمستخدم المخول إعادة تفعيله عند الحاجة.</div>;
   function pick(e: ChangeEvent<HTMLInputElement>) { setFile(e.target.files?.[0]?.name ?? ""); }
   function submit() { if (!text.trim() && !file) return; onUpdate(item, text.trim() || "تم إرفاق ملف جديد.", undefined, file || undefined); setText(""); setFile(""); }
   return <div className="mt-6 rounded-2xl border border-white/8 bg-black/10 p-3"><textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder={`أضف تحديثاً باسم ${currentUser.name}...`} className="w-full resize-none bg-transparent p-2 text-sm outline-none placeholder:text-slate-600" /><div className="flex flex-col gap-2 border-t border-white/7 pt-3 sm:flex-row"><label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/8 px-3 py-2 text-[10px] text-slate-500"><Paperclip size={13} />{file || "إرفاق ملف"}<input type="file" className="hidden" onChange={pick} /></label><button onClick={submit} className="mr-auto flex h-9 items-center gap-2 rounded-xl bg-cyan-300 px-4 text-[10px] font-black text-slate-950"><Send size={12} />إرسال التحديث</button></div></div>;
