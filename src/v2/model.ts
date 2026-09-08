@@ -12,13 +12,20 @@ export type DemoUser = {
   departmentId?: string;
 };
 
+export type AttachmentRef = {
+  path: string;
+  name: string;
+  mime?: string;
+  size?: number;
+};
+
 export type UpdateEntry = {
   id: string;
   authorId: string;
   text: string;
   at: string;
   status?: TaskStatus;
-  attachment?: string;
+  attachment?: string | AttachmentRef;
   system?: boolean;
   editedAt?: string;
   editedById?: string;
@@ -60,9 +67,19 @@ export type Notice = {
   read: boolean;
 };
 
+export type CallRequest = {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  createdAt: string;
+  active: boolean;
+  resolvedAt?: string;
+};
+
 export type AppState = {
   tasks: Assignment[];
   notices: Notice[];
+  callRequests: CallRequest[];
   currentUserId: string;
 };
 
@@ -124,6 +141,7 @@ export function makeSeedState(): AppState {
   return {
     tasks,
     currentUserId: "boss",
+    callRequests: [],
     notices: [
       { id: "n-1", userId: "boss", taskId: "a-2", text: "مشروع جاهز للمراجعة: تصميم تغطية كاميرات", at: ago(2), read: false },
       { id: "n-2", userId: "head-studies", taskId: "a-1", text: "يوجد تحديث جديد على المشروع PR-0261", at: ago(6), read: false },
