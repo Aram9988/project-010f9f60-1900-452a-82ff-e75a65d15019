@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import OrganizationalCommandCenter from "@/v8/App";
+import SyncGate from "@/v8/SyncGate";
 
 export const Route = createFileRoute("/")({
-  component: OrganizationalCommandCenter,
+  component: SyncGate,
 });
