@@ -66,9 +66,8 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
   useEffect(() => {
     if (!isFullscreen) return;
     const timer = window.setTimeout(fitTopology, 100);
-    window.addEventListener("resize", fitTopology);
-    return () => { window.clearTimeout(timer); window.removeEventListener("resize", fitTopology); };
-  }, [isFullscreen, state, items]);
+    return () => window.clearTimeout(timer);
+  }, [isFullscreen]);
 
   if (!current) return null;
 
@@ -176,8 +175,6 @@ function TopologyConnectorFan({ childCount, activeFlags, depth }: { childCount: 
     <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 80" preserveAspectRatio="none">
       <defs><filter id={`topology-glow-${depth}-${childCount}`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
       {Array.from({ length: childCount }).map((_, index) => {
-        // The page is RTL, so flex visually places children in the reverse horizontal order.
-        // Mirror the connector coordinate so each pulse terminates at the same child its active flag belongs to.
         const x = ((childCount - index - 0.5) / childCount) * 100;
         const d = childCount === 1 ? "M50 0 C38 20 62 52 50 80" : `M50 0 C50 28 ${x} 26 ${x} 80`;
         const active = !!activeFlags[index];
