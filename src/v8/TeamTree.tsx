@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { BriefcaseBusiness, CheckCircle2, ChevronDown, ChevronUp, CircleDot, Clock3, Focus, ListTodo, Maximize2, Minimize2, Minus, Network, PhoneCall, Plus, Radio, UserRound, UsersRound } from "lucide-react";
-import { statusMeta, type Assignment, type TaskStatus } from "../v2/model";
+import { statusMeta, type Assignment, type CallRequest, type TaskStatus } from "../v2/model";
 import { descendants, roleOf, type OrgState, type OrgUser } from "./orgModel";
+import { useLiveAppState } from "./liveState";
 
-const CALL_STORAGE_KEY = "rif-dimashq-call-requests-v1";
-type CallRequest = { id: string; fromUserId: string; toUserId: string; createdAt: string; active: boolean };
 type Point = { x: number; y: number };
 type Tone = "active" | "pending" | "done";
-
-function loadCallRequests(): CallRequest[] {
-  if (typeof window === "undefined") return [];
-  try { const raw = localStorage.getItem(CALL_STORAGE_KEY); return raw ? JSON.parse(raw) as CallRequest[] : []; } catch { return []; }
-}
 
 function itemTone(status: TaskStatus): Tone {
   if (status === "active") return "active";
@@ -30,8 +24,26 @@ function hasActiveWork(userId: string, state: OrgState, items: Assignment[], vis
     .some((child) => hasActiveWork(child.id, state, items, visibleIds));
 }
 
+function callTargetFor(state: OrgState, user: OrgUser) {
+  const role = roleOf(state, user);
+  if (role?.key === "department_head") {
+    return state.users.find((u) => u.active && roleOf(state, u)?.key === "branch_head")?.id;
+  }
+  if (role?.key !== "office_responsible") return undefined;
+
+  const directManager = user.managerId ? state.users.find((u) => u.id === user.managerId && u.active) : undefined;
+  if (directManager && roleOf(state, directManager)?.key === "department_head") return directManager.id;
+
+  const department = user.departmentId ? state.departments.find((d) => d.id === user.departmentId) : undefined;
+  const configuredHead = department?.headUserId ? state.users.find((u) => u.id === department.headUserId && u.active) : undefined;
+  if (configuredHead && roleOf(state, configuredHead)?.key === "department_head") return configuredHead.id;
+
+  return state.users.find((u) => u.active && u.departmentId === user.departmentId && roleOf(state, u)?.key === "department_head")?.id;
+}
+
 export default function TeamTree({ state, items, currentUserId, onOpenItem }: { state: OrgState; items: Assignment[]; currentUserId: string; onOpenItem: (id: string) => void }) {
   const current = state.users.find((u) => u.id === currentUserId);
+  const [liveApp, setLiveApp] = useLiveAppState();
   const panelRef = useRef<HTMLElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -40,9 +52,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
-  const [callRequests, setCallRequests] = useState<CallRequest[]>(() => loadCallRequests());
 
-  useEffect(() => { localStorage.setItem(CALL_STORAGE_KEY, JSON.stringify(callRequests)); }, [callRequests]);
   useEffect(() => {
     const handleFullscreen = () => {
       const active = document.fullscreenElement === panelRef.current;
@@ -78,24 +88,39 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
   const visibleUsers = [root, ...descendants(state, root.id)].filter((u) => u.active);
   const visibleIds = new Set(visibleUsers.map((u) => u.id));
   const workingCount = visibleUsers.filter((u) => directActive(u.id, items)).length;
-  const activeCalls = callRequests.filter((r) => r.active);
-
-  const allowedCallTarget = (() => {
-    if (currentRole?.key === "department_head") return branchHead?.id;
-    if (currentRole?.key === "office_responsible") {
-      const manager = state.users.find((u) => u.id === currentUser.managerId);
-      return roleOf(state, manager)?.key === "department_head" ? manager?.id : undefined;
-    }
-    return undefined;
-  })();
+  const activeCalls = (liveApp.callRequests ?? []).filter((r) => r.active);
+  const allowedCallTarget = callTargetFor(state, currentUser);
+  const myActiveCall = allowedCallTarget ? activeCalls.find((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget) : undefined;
 
   function requestCall() {
-    if (!allowedCallTarget) return;
-    if (activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget)) return;
-    setCallRequests((prev) => [{ id: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, fromUserId: currentUser.id, toUserId: allowedCallTarget, createdAt: new Date().toISOString(), active: true }, ...prev]);
+    if (!allowedCallTarget || myActiveCall) return;
+    const at = new Date().toISOString();
+    const target = state.users.find((u) => u.id === allowedCallTarget);
+    const request: CallRequest = { id: `call-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, fromUserId: currentUser.id, toUserId: allowedCallTarget, createdAt: at, active: true };
+    setLiveApp((s) => {
+      const calls = s.callRequests ?? [];
+      if (calls.some((r) => r.active && r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget)) return s;
+      return {
+        ...s,
+        callRequests: [request, ...calls],
+        notices: [{ id: `notice-${request.id}`, userId: allowedCallTarget, text: `طلب اتصال من ${currentUser.name}${target ? ` إلى ${target.name}` : ""}.`, at, read: false }, ...s.notices],
+      };
+    });
   }
 
-  function resolveCall(id: string) { setCallRequests((prev) => prev.map((r) => r.id === id ? { ...r, active: false } : r)); }
+  function resolveCall(id: string) {
+    const at = new Date().toISOString();
+    setLiveApp((s) => {
+      const call = (s.callRequests ?? []).find((r) => r.id === id);
+      if (!call || !call.active || call.toUserId !== currentUser.id) return s;
+      return {
+        ...s,
+        callRequests: (s.callRequests ?? []).map((r) => r.id === id ? { ...r, active: false, resolvedAt: at } : r),
+        notices: [{ id: `notice-resolved-${id}-${Date.now()}`, userId: call.fromUserId, text: `تم استلام طلب الاتصال من قبل ${currentUser.name}.`, at, read: false }, ...s.notices],
+      };
+    });
+  }
+
   function setZoomSafe(next: number) { setZoom(Math.min(1.8, Math.max(0.22, Number(next.toFixed(2))))); }
   function onTopologyWheel(e: React.WheelEvent<HTMLDivElement>) { if (!isFullscreen) return; e.preventDefault(); const step = e.deltaY < 0 ? 0.1 : -0.1; setZoom((value) => Math.min(1.8, Math.max(0.22, Number((value + step).toFixed(2))))); }
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) { if (!isFullscreen || e.button !== 0 || (e.target as HTMLElement).closest("button")) return; dragRef.current = { pointerId: e.pointerId, start: { x: e.clientX, y: e.clientY }, origin: pan }; e.currentTarget.setPointerCapture(e.pointerId); setDragging(true); }
@@ -111,7 +136,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
         <p className="mt-1 text-xs leading-6 text-slate-500">الموجة تبدأ من رئيس القسم وتتبع المسار الحقيقي حتى بطاقة الشخص صاحب العمل النشط. الأعمال غير المستلمة والمنتهية لا تولد موجة.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {allowedCallTarget && <button type="button" onClick={requestCall} disabled={activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget)} className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2 text-[10px] font-black text-amber-200 disabled:opacity-45"><PhoneCall size={14} />{activeCalls.some((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget) ? "تم إرسال طلب الاتصال" : "طلب اتصال من المسؤول"}</button>}
+        {allowedCallTarget && <button type="button" onClick={requestCall} disabled={!!myActiveCall} className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2 text-[10px] font-black text-amber-200 disabled:opacity-45"><PhoneCall size={14} />{myActiveCall ? "تم إرسال طلب الاتصال" : currentRole?.key === "office_responsible" ? "طلب اتصال من رئيس القسم" : "طلب اتصال من رئيس الفرع"}</button>}
         <LiveStat label="الأفراد" value={visibleUsers.length} icon={<UsersRound size={14} />} />
         <LiveStat label="نشط الآن" value={workingCount} icon={<Radio size={14} />} active />
         {activeCalls.length > 0 && <LiveStat label="طلبات اتصال" value={activeCalls.length} icon={<PhoneCall size={14} />} warning />}
@@ -215,7 +240,7 @@ function PersonNode({ user, roleName, subtitle, activeItems, pendingItems, compl
     </> : <>
       <WorkSection title="الأعمال النشطة" count={activeItems.length} tone="active" items={activeItems} onOpenItem={onOpenItem} />
       {pendingItems.length > 0 && <WorkSection title="بانتظار / غير نشط" count={pendingItems.length} tone="pending" items={pendingItems} onOpenItem={onOpenItem} />}
-      {completedItems.length > 0 && <WorkSection title="الأعمال المنتهية" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} />}
+      {completedItems.length > 0 && <WorkSection title="الأعمال المنتهية" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} />
     </>}
   </div>;
 }
