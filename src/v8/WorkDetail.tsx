@@ -40,6 +40,12 @@ type Props = {
   onReopen: (item: Assignment) => void;
 };
 
+type TimelineEntry = {
+  update: UpdateEntry;
+  sourceItem: Assignment;
+  relatedTask?: Assignment;
+};
+
 export default function WorkDetail({ item, allItems, org, currentUser, onBack, onOpenItem, onAssign, onUpdate, onTransition, onEditUpdate, onDeleteUpdate, onArchive, onRestore, onDelete, onReopen }: Props) {
   const isProject = item.kind === "project";
   const noun = isProject ? "المشروع" : "المهمة";
@@ -74,7 +80,13 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
 
   const branch = org.users.find((u) => roleOf(org, u)?.key === "branch_head");
   const deptHead = dept?.headUserId ? org.users.find((u) => u.id === dept.headUserId) : undefined;
-  const visibleUpdates = readOnlyProject ? item.updates.filter((u) => u.authorId === branch?.id || u.authorId === deptHead?.id) : item.updates;
+  const visibleDirectUpdates = readOnlyProject ? item.updates.filter((u) => u.authorId === branch?.id || u.authorId === deptHead?.id) : item.updates;
+  const timeline: TimelineEntry[] = isProject
+    ? [
+        ...visibleDirectUpdates.map((update) => ({ update, sourceItem: item })),
+        ...children.flatMap((child) => child.updates.map((update) => ({ update, sourceItem: child, relatedTask: child }))),
+      ].sort((a, b) => b.update.at.localeCompare(a.update.at))
+    : visibleDirectUpdates.map((update) => ({ update, sourceItem: item }));
 
   const assignable = useMemo(() => {
     if (hasPermission(org, currentUser, "assign_department_tasks")) return org.users.filter((u) => u.active);
@@ -110,7 +122,7 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
           {item.status === "new" && !item.archivedAt && <Notice tone="cyan">بانتظار تأكيد الاستلام من {assignee?.name ?? owner?.name ?? "المسؤول"}. لا يمكن توزيع العمل أو إنشاء تسلسل تنفيذي منه قبل الاستلام.</Notice>}
           {item.status === "returned" && !item.archivedAt && <Notice tone="rose">أعيد العمل للتعديل. يجب على {assignee?.name ?? owner?.name ?? "المسؤول"} تأكيد الاستلام مرة أخرى قبل استئناف التنفيذ أو إعادة توزيعه.</Notice>}
           {!isProject && parent && !parentAccepted && <Notice tone="amber">المشروع المرتبط «{parent.title}» لم يتم استلامه بعد أو ينتظر إعادة استلام. لذلك لا يمكن إعادة إسناد هذه المهمة حتى يتم تأكيد استلام المشروع أولاً.</Notice>}
-          {readOnlyProject && <Notice tone="indigo">عرض المشروع لمسؤول المكتب للمتابعة فقط. يمكنه قراءة تحديثات رئيس الفرع ورئيس القسم ولا يمكنه تعديل حالة المشروع.</Notice>}
+          {readOnlyProject && <Notice tone="indigo">عرض المشروع لمسؤول المكتب للمتابعة فقط. تحديثات المهام المرتبطة تظهر هنا تلقائياً مع اسم المهمة، بينما تبقى إجراءات المشروع نفسه للقراءة فقط.</Notice>}
           {isOffice && !isProject && <Notice tone="emerald">عند إنهاء المهمة اضغط «تم الإنجاز». سيصل إشعار إلى رئيس القسم، ولا يظهر لمسؤول المكتب زر «إرسال للاعتماد».</Notice>}
         </div>
 
@@ -147,12 +159,13 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
     </section>}
 
     <section className="tech-panel p-5 md:p-6">
-      <div className="flex items-end justify-between"><div><h2 className="text-base font-black">سجل العمل</h2><p className="mt-1 text-[11px] text-slate-500">{readOnlyProject ? "تظهر تحديثات رئيس الفرع ورئيس القسم فقط." : "التحديثات والقرارات والمرفقات. يمكن لكل مستخدم تعديل أو حذف تحديثاته الخاصة فقط."}</p></div><span className="text-[10px] text-slate-600">{visibleUpdates.length} تحديث</span></div>
-      <div className="mt-6 space-y-4">{visibleUpdates.map((update) => {
+      <div className="flex items-end justify-between"><div><h2 className="text-base font-black">سجل العمل</h2><p className="mt-1 text-[11px] text-slate-500">{isProject ? "سجل موحد للمشروع وجميع مهامه المرتبطة. أي تحديث أو قرار أو مرفق على مهمة يظهر هنا تلقائياً مع اسم المهمة المصدر." : "التحديثات والقرارات والمرفقات. يمكن لكل مستخدم تعديل أو حذف تحديثاته الخاصة فقط."}</p></div><span className="text-[10px] text-slate-600">{timeline.length} تحديث</span></div>
+      <div className="mt-6 space-y-4">{timeline.map(({ update, sourceItem, relatedTask }) => {
         const ownsUpdate = !update.system && update.authorId === currentUser.id;
-        return <UpdateCard key={update.id} update={update} org={org} currentUser={currentUser} item={item} canEdit={!readOnlyProject && ownsUpdate} canDelete={!readOnlyProject && ownsUpdate} onEditUpdate={onEditUpdate} onDeleteUpdate={onDeleteUpdate} />;
+        const canEditSourceUpdate = ownsUpdate && (!readOnlyProject || Boolean(relatedTask));
+        return <UpdateCard key={`${sourceItem.id}-${update.id}`} update={update} org={org} currentUser={currentUser} item={sourceItem} relatedTask={relatedTask} onOpenItem={onOpenItem} canEdit={canEditSourceUpdate} canDelete={canEditSourceUpdate} onEditUpdate={onEditUpdate} onDeleteUpdate={onDeleteUpdate} />;
       })}</div>
-      {readOnlyProject ? <div className="mt-6 rounded-xl border border-white/7 bg-black/10 p-3 text-[10px] text-slate-500">هذا العرض للقراءة فقط لمسؤول المكتب.</div> : item.archivedAt ? <div className="mt-6 text-[10px] text-slate-500">العمل مؤرشف.</div> : <Composer item={item} currentUser={currentUser} onUpdate={onUpdate} />}
+      {readOnlyProject ? <div className="mt-6 rounded-xl border border-white/7 bg-black/10 p-3 text-[10px] text-slate-500">المشروع نفسه للقراءة فقط، لكن تحديثات المهام المرتبطة تظهر ضمن السجل الموحد ويمكن لصاحب التحديث تعديل تحديثه من هنا.</div> : item.archivedAt ? <div className="mt-6 text-[10px] text-slate-500">العمل مؤرشف.</div> : <Composer item={item} currentUser={currentUser} onUpdate={onUpdate} />}
     </section>
   </div>;
 }
@@ -162,7 +175,7 @@ function Notice({ children, tone }: { children: React.ReactNode; tone: "cyan" | 
   return <div className={`mt-4 rounded-xl border px-3 py-2 text-[10px] font-bold leading-5 ${classes}`}>{children}</div>;
 }
 
-function UpdateCard({ update, org, currentUser, item, canEdit, canDelete, onEditUpdate, onDeleteUpdate }: { update: UpdateEntry; org: OrgState; currentUser: OrgUser; item: Assignment; canEdit: boolean; canDelete: boolean; onEditUpdate: (item: Assignment, updateId: string, text: string) => void; onDeleteUpdate: (item: Assignment, updateId: string) => void }) {
+function UpdateCard({ update, org, currentUser, item, relatedTask, onOpenItem, canEdit, canDelete, onEditUpdate, onDeleteUpdate }: { update: UpdateEntry; org: OrgState; currentUser: OrgUser; item: Assignment; relatedTask?: Assignment; onOpenItem: (id: string) => void; canEdit: boolean; canDelete: boolean; onEditUpdate: (item: Assignment, updateId: string, text: string) => void; onDeleteUpdate: (item: Assignment, updateId: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(update.text);
   const [opening, setOpening] = useState(false);
@@ -184,6 +197,7 @@ function UpdateCard({ update, org, currentUser, item, canEdit, canDelete, onEdit
   return <div className="flex gap-3">
     <span className={`mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full ${update.system ? "bg-slate-700" : "bg-cyan-400 text-slate-950"}`}>{update.system ? <ShieldCheck size={11} /> : <MessageSquareText size={11} />}</span>
     <div className="min-w-0 flex-1 rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-3">
+      {relatedTask && <button type="button" onClick={() => onOpenItem(relatedTask.id)} className="mb-3 inline-flex max-w-full items-center gap-2 rounded-xl border border-indigo-300/15 bg-indigo-300/[0.045] px-3 py-2 text-right text-[9px] font-bold text-indigo-200 hover:border-indigo-300/30"><span className="shrink-0 text-indigo-300/65">تحديث من المهمة</span><span className="truncate">{relatedTask.title}</span><ExternalLink size={10} className="shrink-0" /></button>}
       <div className="flex justify-between gap-3">
         <span className="text-[11px] font-bold">{update.system ? "النظام" : org.users.find((x) => x.id === update.authorId)?.name ?? "مستخدم"}</span>
         <div className="flex items-center gap-2">
