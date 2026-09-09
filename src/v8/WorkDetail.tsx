@@ -85,7 +85,7 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
     ? [
         ...visibleDirectUpdates.map((update) => ({ update, sourceItem: item })),
         ...children.flatMap((child) => child.updates.map((update) => ({ update, sourceItem: child, relatedTask: child }))),
-      ].sort((a, b) => b.update.at.localeCompare(a.update.at))
+      ].sort((a, b) => a.update.at.localeCompare(b.update.at))
     : visibleDirectUpdates.map((update) => ({ update, sourceItem: item }));
 
   const assignable = useMemo(() => {
