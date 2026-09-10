@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { STORAGE_KEY, makeSeedState, type AppState, type Assignment, type CallRequest, type Notice, type UpdateEntry } from "../v2/model";
-import { ORG_STORAGE_KEY, loadOrgState, saveOrgState, type OrgState } from "./orgModel";
+import { ORG_STORAGE_KEY, loadOrgState, saveOrgState, type OrgDepartment, type OrgOffice, type OrgRole, type OrgState, type OrgUser } from "./orgModel";
 
 const APP_CHANNEL = "rif-dimashq-command-center-app-v1";
 const ORG_CHANNEL = "rif-dimashq-command-center-org-v1";
 const CALL_STORAGE_KEY = "rif-dimashq-call-requests-v1";
 export const WORKSPACE_SYNC_KEY_STORAGE = "rif-dimashq-workspace-sync-key-v1";
 const SYNC_ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
-const POLL_MS = 2000;
+const POLL_MS = 1500;
 const LEGACY_DEMO_WORK_IDS = new Set(["a-1", "a-2", "a-3", "a-4", "a-5"]);
 
 type RemotePayload = { app?: AppState; org?: OrgState };
@@ -133,6 +133,35 @@ function mergeAppForSync(remoteValue: Partial<AppState> | AppState, localValue: 
   };
 }
 
+function mergeById<T extends { id: string }>(remote: T[] = [], local: T[] = [], merge?: (remoteItem: T, localItem: T) => T) {
+  const byId = new Map<string, T>();
+  remote.forEach((item) => byId.set(item.id, item));
+  local.forEach((item) => {
+    const previous = byId.get(item.id);
+    byId.set(item.id, previous && merge ? merge(previous, item) : item);
+  });
+  return [...byId.values()];
+}
+
+function mergeOrgUser(remoteUser: OrgUser, localUser: OrgUser): OrgUser {
+  return {
+    ...remoteUser,
+    ...localUser,
+    avatarDataUrl: localUser.avatarDataUrl || remoteUser.avatarDataUrl,
+  };
+}
+
+function mergeOrgForSync(remote: OrgState, local: OrgState): OrgState {
+  return {
+    ...remote,
+    ...local,
+    roles: mergeById<OrgRole>(remote.roles, local.roles),
+    departments: mergeById<OrgDepartment>(remote.departments, local.departments),
+    offices: mergeById<OrgOffice>(remote.offices, local.offices),
+    users: mergeById<OrgUser>(remote.users, local.users, mergeOrgUser),
+  };
+}
+
 function readCallStorage(): CallRequest[] {
   if (typeof window === "undefined") return [];
   try {
@@ -176,7 +205,12 @@ function syncKey() { return typeof window === "undefined" ? "" : localStorage.ge
 
 async function pullRemote(): Promise<RemoteSnapshot | null> {
   const key = syncKey(); if (!key) return null;
-  try { const res = await fetch(SYNC_ENDPOINT, { headers: { "x-workspace-key": key } }); if (!res.ok) return null; return await res.json() as RemoteSnapshot; } catch { return null; }
+  try {
+    const url = `${SYNC_ENDPOINT}?state=1&_=${Date.now()}`;
+    const res = await fetch(url, { cache: "no-store", headers: { "x-workspace-key": key, "Cache-Control": "no-cache" } });
+    if (!res.ok) return null;
+    return await res.json() as RemoteSnapshot;
+  } catch { return null; }
 }
 
 async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
@@ -188,10 +222,13 @@ async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
       const localApp = mergeTreeCallsIntoApp(value as AppState);
       const remoteApp = current.payload?.app;
       nextValue = remoteApp ? mergeAppForSync(remoteApp, localApp) : normalizeAppState(localApp);
+    } else {
+      const remoteOrg = current.payload?.org;
+      nextValue = remoteOrg ? mergeOrgForSync(remoteOrg, value as OrgState) : value;
     }
     const payload: RemotePayload = { ...(current.payload ?? {}), [part]: nextValue };
     try {
-      const res = await fetch(SYNC_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json", "x-workspace-key": key }, body: JSON.stringify({ payload, revision: current.revision ?? 0 }) });
+      const res = await fetch(SYNC_ENDPOINT, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", "x-workspace-key": key, "Cache-Control": "no-cache" }, body: JSON.stringify({ payload, revision: current.revision ?? 0 }) });
       if (res.ok) return;
       if (res.status !== 409) return;
     } catch { return; }
@@ -199,7 +236,10 @@ async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
 }
 
 export async function verifyWorkspaceSyncKey(key: string) {
-  try { const res = await fetch(SYNC_ENDPOINT, { headers: { "x-workspace-key": key.trim() } }); return res.ok; } catch { return false; }
+  try {
+    const res = await fetch(`${SYNC_ENDPOINT}?verify=1&_=${Date.now()}`, { cache: "no-store", headers: { "x-workspace-key": key.trim(), "Cache-Control": "no-cache" } });
+    return res.ok;
+  } catch { return false; }
 }
 export function isWorkspaceSyncConfigured() { return Boolean(syncKey()); }
 
@@ -238,25 +278,37 @@ export function useLiveAppState(): [AppState, Dispatch<SetStateAction<AppState>>
     };
     window.addEventListener("storage", onStorage);
     let disposed = false;
+    let syncing = false;
     const sync = async () => {
-      const remote = await pullRemote();
-      if (disposed || !remote) return;
-      if (remote.payload?.app) {
-        const local = mergeTreeCallsIntoApp(readStoredAppState() ?? initial);
-        const next = mergeAppForSync(remote.payload.app, local);
-        writeStoredAppState(next);
-        writeCallStorage(next.callRequests ?? []);
-        setState(next);
-        const remoteNormalized = normalizeAppState(remote.payload.app);
-        if (JSON.stringify(next.tasks) !== JSON.stringify(remoteNormalized.tasks) || JSON.stringify(next.callRequests ?? []) !== JSON.stringify(remoteNormalized.callRequests ?? []) || JSON.stringify(next.notices) !== JSON.stringify(remoteNormalized.notices)) {
-          void pushRemotePart("app", next);
+      if (syncing) return;
+      syncing = true;
+      try {
+        const remote = await pullRemote();
+        if (disposed || !remote) return;
+        if (remote.payload?.app) {
+          const local = mergeTreeCallsIntoApp(readStoredAppState() ?? initial);
+          const next = mergeAppForSync(remote.payload.app, local);
+          writeStoredAppState(next);
+          writeCallStorage(next.callRequests ?? []);
+          setState(next);
+          const remoteNormalized = normalizeAppState(remote.payload.app);
+          if (JSON.stringify(next.tasks) !== JSON.stringify(remoteNormalized.tasks) || JSON.stringify(next.callRequests ?? []) !== JSON.stringify(remoteNormalized.callRequests ?? []) || JSON.stringify(next.notices) !== JSON.stringify(remoteNormalized.notices)) {
+            void pushRemotePart("app", next);
+          }
+        } else {
+          await pushRemotePart("app", initial);
         }
-      } else {
-        await pushRemotePart("app", initial);
+      } finally {
+        syncing = false;
       }
     };
+    const syncWhenVisible = () => { if (document.visibilityState === "visible") void sync(); };
+    const syncWhenOnline = () => void sync();
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    window.addEventListener("online", syncWhenOnline);
+    window.addEventListener("focus", syncWhenOnline);
     void sync(); const timer = window.setInterval(() => void sync(), POLL_MS);
-    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener("storage", onStorage); channel?.close(); channelRef.current = null; };
+    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener("storage", onStorage); document.removeEventListener("visibilitychange", syncWhenVisible); window.removeEventListener("online", syncWhenOnline); window.removeEventListener("focus", syncWhenOnline); channel?.close(); channelRef.current = null; };
   }, []);
   const setLiveState = useCallback<Dispatch<SetStateAction<AppState>>>((action) => {
     setState((current) => {
@@ -279,16 +331,61 @@ export function useLiveOrgState(): [OrgState, Dispatch<SetStateAction<OrgState>>
   useEffect(() => {
     const initial = loadOrgState();
     const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(ORG_CHANNEL) : null; channelRef.current = channel;
-    if (channel) channel.onmessage = (event) => setState(event.data as OrgState);
-    const onStorage = (event: StorageEvent) => { if (event.key !== ORG_STORAGE_KEY || !event.newValue) return; try { setState(JSON.parse(event.newValue) as OrgState); } catch { /* ignore */ } };
+    if (channel) channel.onmessage = (event) => {
+      const incoming = event.data as OrgState;
+      const next = mergeOrgForSync(incoming, loadOrgState());
+      saveOrgState(next);
+      setState(next);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== ORG_STORAGE_KEY || !event.newValue) return;
+      try {
+        const incoming = JSON.parse(event.newValue) as OrgState;
+        const next = mergeOrgForSync(incoming, loadOrgState());
+        saveOrgState(next);
+        setState(next);
+      } catch { /* ignore */ }
+    };
     window.addEventListener("storage", onStorage);
     let disposed = false;
-    const sync = async () => { const remote = await pullRemote(); if (disposed || !remote) return; if (remote.payload?.org) { saveOrgState(remote.payload.org); setState(remote.payload.org); } else { await pushRemotePart("org", initial); } };
+    let syncing = false;
+    const sync = async () => {
+      if (syncing) return;
+      syncing = true;
+      try {
+        const remote = await pullRemote();
+        if (disposed || !remote) return;
+        if (remote.payload?.org) {
+          const local = loadOrgState();
+          const next = mergeOrgForSync(remote.payload.org, local);
+          saveOrgState(next);
+          setState(next);
+          if (JSON.stringify(next) !== JSON.stringify(remote.payload.org)) void pushRemotePart("org", next);
+        } else {
+          await pushRemotePart("org", initial);
+        }
+      } finally {
+        syncing = false;
+      }
+    };
+    const syncWhenVisible = () => { if (document.visibilityState === "visible") void sync(); };
+    const syncWhenOnline = () => void sync();
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    window.addEventListener("online", syncWhenOnline);
+    window.addEventListener("focus", syncWhenOnline);
     void sync(); const timer = window.setInterval(() => void sync(), POLL_MS);
-    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener("storage", onStorage); channel?.close(); channelRef.current = null; };
+    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener("storage", onStorage); document.removeEventListener("visibilitychange", syncWhenVisible); window.removeEventListener("online", syncWhenOnline); window.removeEventListener("focus", syncWhenOnline); channel?.close(); channelRef.current = null; };
   }, []);
   const setLiveState = useCallback<Dispatch<SetStateAction<OrgState>>>((action) => {
-    setState((current) => { const latest = loadOrgState() ?? current; const next = typeof action === "function" ? action(latest) : action; saveOrgState(next); channelRef.current?.postMessage(next); void pushRemotePart("org", next); return next; });
+    setState((current) => {
+      const latest = loadOrgState() ?? current;
+      const proposed = typeof action === "function" ? action(latest) : action;
+      const next = mergeOrgForSync(latest, proposed);
+      saveOrgState(next);
+      channelRef.current?.postMessage(next);
+      void pushRemotePart("org", next);
+      return next;
+    });
   }, []);
   return [state, setLiveState];
 }
