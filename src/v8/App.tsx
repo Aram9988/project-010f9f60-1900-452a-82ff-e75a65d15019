@@ -58,7 +58,7 @@ function Shell({ org, setOrg, app, setApp, currentUser, onLogout }: { org: OrgSt
   const canTree = !diwanUser && (hasPermission(org, currentUser, "view_all_tree") || hasPermission(org, currentUser, "view_team_tree"));
   const canAdmin = !diwanUser && (hasPermission(org, currentUser, "manage_structure") || hasPermission(org, currentUser, "manage_users") || hasPermission(org, currentUser, "manage_roles"));
   const canProjects = !diwanUser && (hasPermission(org, currentUser, "create_projects") || items.some((i) => kindOf(i) === "project"));
-  const canTasks = hasPermission(org, currentUser, "create_tasks") || items.some((i) => kindOf(i) === "task");
+  const canTasks = diwanUser || hasPermission(org, currentUser, "create_tasks") || items.some((i) => kindOf(i) === "task");
   const canReports = hasPermission(org, currentUser, "view_reports") || diwanUser;
 
   function notify(userId: string, text: string, itemId?: string) {
