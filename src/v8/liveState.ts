@@ -207,7 +207,7 @@ async function pullRemote(): Promise<RemoteSnapshot | null> {
   const key = syncKey(); if (!key) return null;
   try {
     const url = `${SYNC_ENDPOINT}?state=1&_=${Date.now()}`;
-    const res = await fetch(url, { cache: "no-store", headers: { "x-workspace-key": key, "Cache-Control": "no-cache" } });
+    const res = await fetch(url, { cache: "no-store", headers: { "x-workspace-key": key } });
     if (!res.ok) return null;
     return await res.json() as RemoteSnapshot;
   } catch { return null; }
@@ -228,7 +228,7 @@ async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
     }
     const payload: RemotePayload = { ...(current.payload ?? {}), [part]: nextValue };
     try {
-      const res = await fetch(SYNC_ENDPOINT, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", "x-workspace-key": key, "Cache-Control": "no-cache" }, body: JSON.stringify({ payload, revision: current.revision ?? 0 }) });
+      const res = await fetch(SYNC_ENDPOINT, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", "x-workspace-key": key }, body: JSON.stringify({ payload, revision: current.revision ?? 0 }) });
       if (res.ok) return;
       if (res.status !== 409) return;
     } catch { return; }
@@ -237,7 +237,7 @@ async function pushRemotePart(part: "app" | "org", value: AppState | OrgState) {
 
 export async function verifyWorkspaceSyncKey(key: string) {
   try {
-    const res = await fetch(`${SYNC_ENDPOINT}?verify=1&_=${Date.now()}`, { cache: "no-store", headers: { "x-workspace-key": key.trim(), "Cache-Control": "no-cache" } });
+    const res = await fetch(`${SYNC_ENDPOINT}?verify=1&_=${Date.now()}`, { cache: "no-store", headers: { "x-workspace-key": key.trim() } });
     return res.ok;
   } catch { return false; }
 }
@@ -331,21 +331,8 @@ export function useLiveOrgState(): [OrgState, Dispatch<SetStateAction<OrgState>>
   useEffect(() => {
     const initial = loadOrgState();
     const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(ORG_CHANNEL) : null; channelRef.current = channel;
-    if (channel) channel.onmessage = (event) => {
-      const incoming = event.data as OrgState;
-      const next = mergeOrgForSync(incoming, loadOrgState());
-      saveOrgState(next);
-      setState(next);
-    };
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== ORG_STORAGE_KEY || !event.newValue) return;
-      try {
-        const incoming = JSON.parse(event.newValue) as OrgState;
-        const next = mergeOrgForSync(incoming, loadOrgState());
-        saveOrgState(next);
-        setState(next);
-      } catch { /* ignore */ }
-    };
+    if (channel) channel.onmessage = (event) => { const incoming = event.data as OrgState; const next = mergeOrgForSync(incoming, loadOrgState()); saveOrgState(next); setState(next); };
+    const onStorage = (event: StorageEvent) => { if (event.key !== ORG_STORAGE_KEY || !event.newValue) return; try { const incoming = JSON.parse(event.newValue) as OrgState; const next = mergeOrgForSync(incoming, loadOrgState()); saveOrgState(next); setState(next); } catch { /* ignore */ } };
     window.addEventListener("storage", onStorage);
     let disposed = false;
     let syncing = false;
@@ -356,8 +343,7 @@ export function useLiveOrgState(): [OrgState, Dispatch<SetStateAction<OrgState>>
         const remote = await pullRemote();
         if (disposed || !remote) return;
         if (remote.payload?.org) {
-          const local = loadOrgState();
-          const next = mergeOrgForSync(remote.payload.org, local);
+          const next = mergeOrgForSync(remote.payload.org, loadOrgState());
           saveOrgState(next);
           setState(next);
           if (JSON.stringify(next) !== JSON.stringify(remote.payload.org)) void pushRemotePart("org", next);
@@ -378,9 +364,8 @@ export function useLiveOrgState(): [OrgState, Dispatch<SetStateAction<OrgState>>
   }, []);
   const setLiveState = useCallback<Dispatch<SetStateAction<OrgState>>>((action) => {
     setState((current) => {
-      const latest = loadOrgState() ?? current;
-      const proposed = typeof action === "function" ? action(latest) : action;
-      const next = mergeOrgForSync(latest, proposed);
+      const latest = mergeOrgForSync(current, loadOrgState());
+      const next = typeof action === "function" ? action(latest) : action;
       saveOrgState(next);
       channelRef.current?.postMessage(next);
       void pushRemotePart("org", next);
