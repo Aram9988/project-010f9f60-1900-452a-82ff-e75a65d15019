@@ -13,30 +13,6 @@ new_children = '''    {children.length > 0 && expanded && <div className="relati
       <div className="flex items-start justify-center gap-10 px-5">{children.map((child) => <div key={child.id} className="flex w-[300px] shrink-0 justify-center overflow-visible"><OrgNode user={child} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} callRequests={callRequests} currentUserId={currentUserId} onResolveCall={onResolveCall} branchHeadId={branchHeadId} depth={depth + 1} /></div>)}</div>
     </div>}'''
 
-old_fan = '''function TopologyConnectorFan({ childCount, activeFlags, depth }: { childCount: number; activeFlags: boolean[]; depth: number }) {
-  return <div className="relative h-20 w-full min-w-full">
-    <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 80" preserveAspectRatio="none">
-      <defs><filter id={`topology-glow-${depth}-${childCount}`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
-      {Array.from({ length: childCount }).map((_, index) => {
-        const x = ((childCount - index - 0.5) / childCount) * 100;
-        const d = childCount === 1 ? "M50 0 V80" : `M50 0 V28 H${x} V80`;
-        const active = !!activeFlags[index];
-        return <g key={index}>
-          <path d={d} fill="none" stroke={active ? "rgba(103,232,249,.34)" : "rgba(103,232,249,.16)"} strokeWidth={active ? 1.55 : 1.1} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-          {active && <>
-            <path d={d} fill="none" stroke="rgba(103,232,249,.98)" strokeWidth="2.4" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 30" filter={`url(#topology-glow-${depth}-${childCount})`}>
-              <animate attributeName="stroke-dashoffset" from="0" to="-128" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" />
-            </path>
-            <path d={d} fill="none" stroke="rgba(52,211,153,.7)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1 44">
-              <animate attributeName="stroke-dashoffset" from="-18" to="-146" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" />
-            </path>
-          </>}
-        </g>;
-      })}
-    </svg>
-  </div>;
-}'''
-
 new_fan = '''function TopologyConnectorFan({ childCount, activeFlags, depth }: { childCount: number; activeFlags: boolean[]; depth: number }) {
   const columnWidth = 300;
   const gap = 40;
@@ -69,13 +45,19 @@ new_fan = '''function TopologyConnectorFan({ childCount, activeFlags, depth }: {
       })}
     </svg>
   </div>;
-}'''
+}
+'''
 
 if old_children not in text:
     raise SystemExit("current child layout block not found")
-if old_fan not in text:
-    raise SystemExit("current connector fan block not found")
-
 text = text.replace(old_children, new_children, 1)
-text = text.replace(old_fan, new_fan, 1)
+
+start = text.find("function TopologyConnectorFan(")
+end = text.find("\nfunction PersonNode(", start)
+if start < 0 or end < 0:
+    raise SystemExit("connector function boundaries not found")
+text = text[:start] + new_fan + text[end:]
+
+text = text.replace('خطوط تنظيمية واضحة بدون تقاطعات؛ كل موظف يتصل مباشرة بمسؤوله، وتظهر حركة الإشارة فقط على المسار المؤدي إلى عمل نشط.', 'منحنيات تنظيمية واضحة تتصل بمركز كل بطاقة مباشرة، وتظهر حركة الإشارة فقط على المسار المؤدي إلى عمل نشط.')
+text = text.replace('return <svg aria-hidden="true" className="h-14 w-28 overflow-visible" viewBox="0 0 100 56"><path d="M50 0 V56" fill="none"', 'return <svg aria-hidden="true" className="h-14 w-28 overflow-visible" viewBox="0 0 100 56"><path d="M50 0 C38 16 62 38 50 56" fill="none"')
 path.write_text(text)
