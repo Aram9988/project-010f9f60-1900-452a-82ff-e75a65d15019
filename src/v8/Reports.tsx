@@ -138,6 +138,9 @@ function printCompletedReport(rows: Assignment[], org: OrgState, departmentId: s
 
 export default function Reports({ items, org, currentUser }: { items: Assignment[]; org: OrgState; currentUser: OrgUser }) {
   const [liveApp] = useLiveAppState();
+  const currentRole = roleOf(org, currentUser);
+  const isDiwan = currentRole?.key === "diwan" || currentRole?.name?.trim().includes("ديوان") === true;
+
   const [kind, setKind] = useState<WorkType | "all">("all");
   const [departmentId, setDepartmentId] = useState("all");
   const [assigneeId, setAssigneeId] = useState("all");
@@ -145,12 +148,13 @@ export default function Reports({ items, org, currentUser }: { items: Assignment
   const [completedDepartmentId, setCompletedDepartmentId] = useState("all");
   const [completedPeriod, setCompletedPeriod] = useState<CompletedReportPeriod>("weekly");
   const [completedReportDate, setCompletedReportDate] = useState(() => localDateValue());
-  const [showCompletedReport, setShowCompletedReport] = useState(false);
+  const [showCompletedReport, setShowCompletedReport] = useState(isDiwan);
 
-  const isDiwan = roleOf(org, currentUser)?.key === "diwan";
+  // Diwan is intentionally report-only. It gets the full shared work source here for
+  // report generation, while App.tsx still gives it an empty dashboard/work-list scope.
   const reportSourceItems = isDiwan ? liveApp.tasks : items;
 
-  const rows = useMemo(() => reportSourceItems.filter((i) => (kind === "all" || i.kind === kind) && (departmentId === "all" || i.departmentId === departmentId) && (assigneeId === "all" || i.assigneeId === assigneeId) && (status === "all" || i.status === status)), [reportSourceItems, kind, departmentId, assigneeId, status]);
+  const rows = useMemo(() => items.filter((i) => (kind === "all" || i.kind === kind) && (departmentId === "all" || i.departmentId === departmentId) && (assigneeId === "all" || i.assigneeId === assigneeId) && (status === "all" || i.status === status)), [items, kind, departmentId, assigneeId, status]);
 
   const completedReportRows = useMemo(() => {
     const departmentMatch = (item: Assignment) => completedDepartmentId === "all" || item.departmentId === completedDepartmentId;
@@ -167,7 +171,10 @@ export default function Reports({ items, org, currentUser }: { items: Assignment
 
   function exportExcel() {
     const data = rows.map((i) => ({ النوع: i.kind === "project" ? "مشروع" : "مهمة", الاسم: i.title, القسم: org.departments.find((d) => d.id === i.departmentId)?.name ?? "", "المسند إليه": org.users.find((u) => u.id === i.assigneeId)?.name ?? "", الحالة: statusMeta[i.status].label, الأولوية: priorityMeta[i.priority], الموقع: i.location ?? "", المرجع: i.referenceNumber ?? "" }));
-    const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "التقرير"); XLSX.writeFile(wb, "operations-report.xlsx");
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "التقرير");
+    XLSX.writeFile(wb, "operations-report.xlsx");
   }
 
   const reportHeadline = completedPeriod === "weekly" ? "تقرير الأعمال الأسبوعي" : "تقرير الأعمال الشهري";
@@ -175,13 +182,24 @@ export default function Reports({ items, org, currentUser }: { items: Assignment
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div><div className="text-[10px] tracking-[.2em] text-cyan-300/50">REPORT ENGINE</div><h1 className="mt-2 text-2xl font-black">التقارير</h1><p className="mt-1 text-xs text-slate-500">{isDiwan ? "وصول مخصص للتقارير فقط لجميع الأقسام دون إظهار الأعمال على لوحة المتابعة." : "تقارير حسب القسم والشخص والحالة ونوع العمل."}</p></div>
-      <div className="flex flex-wrap gap-2"><button onClick={() => setShowCompletedReport((value) => !value)} className="report-action border-cyan-300/20 text-cyan-200"><FileDown size={14} />تقرير الأعمال المنجزة</button><button onClick={() => window.print()} className="report-action"><Printer size={14} />طباعة / PDF</button><button onClick={exportExcel} className="report-action"><FileSpreadsheet size={14} />Excel</button><button onClick={() => exportCsv(rows, org)} className="report-action"><Download size={14} />CSV</button></div>
+      <div>
+        <div className="text-[10px] tracking-[.2em] text-cyan-300/50">REPORT ENGINE</div>
+        <h1 className="mt-2 text-2xl font-black">التقارير</h1>
+        <p className="mt-1 text-xs text-slate-500">{isDiwan ? "وصول مخصص للتقارير فقط لجميع الأقسام دون إظهار الأعمال على لوحة المتابعة." : "تقارير حسب القسم والشخص والحالة ونوع العمل."}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => setShowCompletedReport((value) => !value)} className="report-action border-cyan-300/20 text-cyan-200"><FileDown size={14} />تقرير الأعمال المنجزة</button>
+        {!isDiwan && <><button onClick={() => window.print()} className="report-action"><Printer size={14} />طباعة / PDF</button><button onClick={exportExcel} className="report-action"><FileSpreadsheet size={14} />Excel</button><button onClick={() => exportCsv(rows, org)} className="report-action"><Download size={14} />CSV</button></>}
+      </div>
     </div>
 
     {showCompletedReport && <section className="tech-panel overflow-hidden border-cyan-300/15">
       <div className="grid gap-5 border-b border-white/7 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,620px)] lg:items-end">
-        <div className="min-w-0 text-right" dir="rtl"><div className="text-[10px] font-black tracking-[.16em] text-cyan-300/60">COMPLETED WORK REPORT</div><h2 className="mt-2 text-lg font-black">تقرير الأعمال المنجزة</h2><p className="mt-1 max-w-2xl text-[10px] leading-5 text-slate-500">تقرير أسبوعي أو شهري حسب القالب المعتمد، مع الأعمال المنجزة والمهام النشطة الحالية فقط.</p></div>
+        <div className="min-w-0 text-right" dir="rtl">
+          <div className="text-[10px] font-black tracking-[.16em] text-cyan-300/60">COMPLETED WORK REPORT</div>
+          <h2 className="mt-2 text-lg font-black">تقرير الأعمال المنجزة</h2>
+          <p className="mt-1 max-w-2xl text-[10px] leading-5 text-slate-500">تقرير أسبوعي أو شهري حسب القالب المعتمد، مع الأعمال المنجزة والمهام النشطة الحالية فقط.</p>
+        </div>
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" dir="rtl">
           <select className="tech-field w-full min-w-0" value={completedPeriod} onChange={(e) => setCompletedPeriod(e.target.value as CompletedReportPeriod)}><option value="weekly">تقرير أسبوعي</option><option value="monthly">تقرير شهري</option></select>
           <input type="date" className="tech-field w-full min-w-0" value={completedReportDate} onChange={(e) => setCompletedReportDate(e.target.value)} />
@@ -193,15 +211,30 @@ export default function Reports({ items, org, currentUser }: { items: Assignment
         <div className="mx-auto max-w-5xl rounded-[2px] bg-white px-5 py-10 text-slate-950 shadow-2xl sm:px-10" dir="rtl">
           <div className="mb-6 text-right text-[11px]">التاريخ: {fmtReportDate(completedReportDate)}</div>
           <div className="text-center"><div className="text-xl font-black">{reportHeadline}</div><div className="mt-3 text-base">الأعمال المنجزة</div><div className="mt-2 text-[11px] text-slate-600">{reportDepartment}</div></div>
-          <div className="mt-10 overflow-x-auto"><table className="w-full min-w-[560px] table-fixed border-collapse text-right text-[12px]"><thead><tr><th className="border border-slate-500 bg-[#d9eaf7] p-3 text-center">الأعمال المنجزة</th></tr></thead><tbody>{completedReportRows.map((item) => <tr key={item.id}><td className="border border-slate-500 p-3 align-middle leading-6">{reportRowText(item)}</td></tr>)}</tbody></table>{completedReportRows.length === 0 && <div className="border border-t-0 border-slate-500 p-8 text-center text-sm text-slate-500">لا توجد أعمال منجزة أو مهام قيد التنفيذ ضمن هذا الاختيار.</div>}</div>
+          <div className="mt-10 overflow-x-auto">
+            <table className="w-full min-w-[560px] table-fixed border-collapse text-right text-[12px]"><thead><tr><th className="border border-slate-500 bg-[#d9eaf7] p-3 text-center">الأعمال المنجزة</th></tr></thead><tbody>{completedReportRows.map((item) => <tr key={item.id}><td className="border border-slate-500 p-3 align-middle leading-6">{reportRowText(item)}</td></tr>)}</tbody></table>
+            {completedReportRows.length === 0 && <div className="border border-t-0 border-slate-500 p-8 text-center text-sm text-slate-500">لا توجد أعمال منجزة أو مهام قيد التنفيذ ضمن هذا الاختيار.</div>}
+          </div>
         </div>
         <div className="mt-3 text-center text-[9px] text-slate-600">الأعمال المنجزة ضمن الفترة + المهام النشطة الحالية: {completedReportRows.length}</div>
       </div>
     </section>}
 
-    <section className="tech-panel p-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><select className="tech-field" value={kind} onChange={(e) => setKind(e.target.value as WorkType | "all")}><option value="all">المشاريع والمهام</option><option value="project">المشاريع فقط</option><option value="task">المهام فقط</option></select><select className="tech-field" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="all">جميع الأقسام</option>{org.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select><select className="tech-field" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}><option value="all">جميع الأشخاص</option>{org.users.filter((u) => u.active).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select><select className="tech-field" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">جميع الحالات</option>{Object.entries(statusMeta).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></div></section>
-    <section id="print-report" className="tech-panel overflow-hidden"><div className="border-b border-white/7 p-5"><h2 className="text-lg font-black">تقرير المشاريع والمهام</h2><div className="mt-1 text-[10px] text-slate-600">تم إنشاؤه بواسطة: {currentUser.name}</div></div><div className="overflow-x-auto p-5"><table className="w-full min-w-[900px] text-right"><thead><tr className="border-b border-white/8 text-[9px] text-slate-600"><th className="py-3">النوع</th><th>الاسم</th><th>القسم</th><th>المسند إليه</th><th>الحالة</th><th>الأولوية</th><th>الموقع</th></tr></thead><tbody className="divide-y divide-white/7">{rows.map((i) => <tr key={i.id} className="text-[11px]"><td className="py-4 text-cyan-300/70">{i.kind === "project" ? "مشروع" : "مهمة"}</td><td className="font-bold">{i.title}</td><td className="text-slate-400">{org.departments.find((d) => d.id === i.departmentId)?.name ?? "—"}</td><td className="text-slate-400">{org.users.find((u) => u.id === i.assigneeId)?.name ?? "—"}</td><td><StatusChip status={i.status} /></td><td>{priorityMeta[i.priority]}</td><td className="text-slate-500">{i.location || "—"}</td></tr>)}</tbody></table>{rows.length === 0 && <div className="py-10 text-center text-xs text-slate-600">لا توجد نتائج.</div>}</div></section>
+    {!isDiwan && <>
+      <section className="tech-panel p-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><select className="tech-field" value={kind} onChange={(e) => setKind(e.target.value as WorkType | "all")}><option value="all">المشاريع والمهام</option><option value="project">المشاريع فقط</option><option value="task">المهام فقط</option></select><select className="tech-field" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="all">جميع الأقسام</option>{org.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select><select className="tech-field" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}><option value="all">جميع الأشخاص</option>{org.users.filter((u) => u.active).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select><select className="tech-field" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">جميع الحالات</option>{Object.entries(statusMeta).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></div></section>
+      <section id="print-report" className="tech-panel overflow-hidden"><div className="border-b border-white/7 p-5"><h2 className="text-lg font-black">تقرير المشاريع والمهام</h2><div className="mt-1 text-[10px] text-slate-600">تم إنشاؤه بواسطة: {currentUser.name}</div></div><div className="overflow-x-auto p-5"><table className="w-full min-w-[900px] text-right"><thead><tr className="border-b border-white/8 text-[9px] text-slate-600"><th className="py-3">النوع</th><th>الاسم</th><th>القسم</th><th>المسند إليه</th><th>الحالة</th><th>الأولوية</th><th>الموقع</th></tr></thead><tbody className="divide-y divide-white/7">{rows.map((i) => <tr key={i.id} className="text-[11px]"><td className="py-4 text-cyan-300/70">{i.kind === "project" ? "مشروع" : "مهمة"}</td><td className="font-bold">{i.title}</td><td className="text-slate-400">{org.departments.find((d) => d.id === i.departmentId)?.name ?? "—"}</td><td className="text-slate-400">{org.users.find((u) => u.id === i.assigneeId)?.name ?? "—"}</td><td><StatusChip status={i.status} /></td><td>{priorityMeta[i.priority]}</td><td className="text-slate-500">{i.location || "—"}</td></tr>)}</tbody></table>{rows.length === 0 && <div className="py-10 text-center text-xs text-slate-600">لا توجد نتائج.</div>}</div></section>
+    </>}
   </div>;
 }
 
-function exportCsv(rows: Assignment[], org: OrgState) { const table = [["النوع", "الاسم", "القسم", "المسند إليه", "الحالة", "الأولوية", "الموقع"], ...rows.map((i) => [i.kind === "project" ? "مشروع" : "مهمة", i.title, org.departments.find((d) => d.id === i.departmentId)?.name ?? "", org.users.find((u) => u.id === i.assigneeId)?.name ?? "", statusMeta[i.status].label, priorityMeta[i.priority], i.location ?? ""])]; const csv = table.map((r) => r.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n"); const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "operations-report.csv"; a.click(); URL.revokeObjectURL(url); }
+function exportCsv(rows: Assignment[], org: OrgState) {
+  const table = [["النوع", "الاسم", "القسم", "المسند إليه", "الحالة", "الأولوية", "الموقع"], ...rows.map((i) => [i.kind === "project" ? "مشروع" : "مهمة", i.title, org.departments.find((d) => d.id === i.departmentId)?.name ?? "", org.users.find((u) => u.id === i.assigneeId)?.name ?? "", statusMeta[i.status].label, priorityMeta[i.priority], i.location ?? ""])];
+  const csv = table.map((r) => r.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "operations-report.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
