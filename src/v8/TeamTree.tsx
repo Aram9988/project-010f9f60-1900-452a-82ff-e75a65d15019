@@ -217,7 +217,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
 
     <section ref={panelRef} className={`tech-panel overflow-hidden ${isFullscreen ? "topology-fullscreen" : ""}`}>
       <div className="flex items-center justify-between gap-3 border-b border-white/7 px-4 py-3 md:px-6">
-        <div className="text-[10px] text-slate-600">خطوط تنظيمية واضحة بدون تقاطعات؛ كل موظف يتصل مباشرة بمسؤوله، وتظهر حركة الإشارة فقط على المسار المؤدي إلى عمل نشط. في ملء الشاشة استخدم عجلة الماوس للتكبير والتصغير واسحب لتحريك المخطط.</div>
+        <div className="text-[10px] text-slate-600">منحنيات تنظيمية واضحة تتصل بمركز كل بطاقة مباشرة، وتظهر حركة الإشارة فقط على المسار المؤدي إلى عمل نشط. في ملء الشاشة استخدم عجلة الماوس للتكبير والتصغير واسحب لتحريك المخطط.</div>
         <div className="flex shrink-0 items-center gap-2">
           {isFullscreen && <div className="flex items-center gap-1 rounded-xl border border-white/8 bg-black/15 p-1"><button type="button" onClick={() => setZoomSafe(zoom - 0.1)} className="topology-control"><Minus size={14} /></button><span className="min-w-12 text-center font-mono text-[9px] font-bold text-slate-400">{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoomSafe(zoom + 0.1)} className="topology-control"><Plus size={14} /></button><button type="button" onClick={fitTopology} className="topology-control"><Focus size={14} /></button></div>}
           <button type="button" onClick={toggleFullscreen} className="flex h-9 items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 text-[10px] font-bold text-slate-300 hover:border-cyan-300/20 hover:text-cyan-200">{isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{isFullscreen ? "خروج" : "ملء الشاشة"}</button>
@@ -237,7 +237,7 @@ function BranchRoot({ name, active }: { name: string; active: boolean }) {
 }
 
 function CurvedStem() {
-  return <svg aria-hidden="true" className="h-14 w-28 overflow-visible" viewBox="0 0 100 56"><path d="M50 0 V56" fill="none" stroke="rgba(103,232,249,.24)" strokeWidth="1.4" strokeLinecap="round" /></svg>;
+  return <svg aria-hidden="true" className="h-14 w-28 overflow-visible" viewBox="0 0 100 56"><path d="M50 0 C38 16 62 38 50 56" fill="none" stroke="rgba(103,232,249,.24)" strokeWidth="1.4" strokeLinecap="round" /></svg>;
 }
 
 function OrgNode({ user, state, items, visibleIds, onOpenItem, callRequests, currentUserId, onResolveCall, branchHeadId, isRoot = false, depth }: { user: OrgUser; state: OrgState; items: Assignment[]; visibleIds: Set<string>; onOpenItem: (id: string) => void; callRequests: CallRequest[]; currentUserId: string; onResolveCall: (id: string) => void; branchHeadId?: string; isRoot?: boolean; depth: number }) {
@@ -262,39 +262,39 @@ function OrgNode({ user, state, items, visibleIds, onOpenItem, callRequests, cur
     <PersonNode user={user} roleName={role?.name ?? "بدون دور"} subtitle={office?.name ?? dept?.name ?? user.title ?? "إدارة الفرع"} activeItems={activeItems} pendingItems={pendingItems} completedItems={completedItems} commandItems={commandItems} otherOwnItems={otherOwnItems} delegatedTeamItems={delegatedTeamItems} onOpenItem={onOpenItem} isRoot={isRoot} childCount={children.length} expanded={expanded} onToggle={() => setExpanded((v) => !v)} incomingCalls={incomingCalls} state={state} currentUserId={currentUserId} onResolveCall={onResolveCall} />
     {children.length > 0 && expanded && <div className="relative flex w-max min-w-full flex-col items-center">
       <TopologyConnectorFan childCount={children.length} activeFlags={childActiveFlags} depth={depth} />
-      <div className="flex items-start justify-center gap-10 px-5">{children.map((child) => <div key={child.id} className="flex min-w-[300px] justify-center"><OrgNode user={child} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} callRequests={callRequests} currentUserId={currentUserId} onResolveCall={onResolveCall} branchHeadId={branchHeadId} depth={depth + 1} /></div>)}</div>
+      <div className="flex items-start justify-center gap-10 px-5">{children.map((child) => <div key={child.id} className="flex w-[300px] shrink-0 justify-center overflow-visible"><OrgNode user={child} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} callRequests={callRequests} currentUserId={currentUserId} onResolveCall={onResolveCall} branchHeadId={branchHeadId} depth={depth + 1} /></div>)}</div>
     </div>}
   </div>;
 }
 
 function TopologyConnectorFan({ childCount, activeFlags, depth }: { childCount: number; activeFlags: boolean[]; depth: number }) {
-  const targets = Array.from({ length: childCount }, (_, index) => ((childCount - index - 0.5) / childCount) * 100);
-  const left = Math.min(...targets);
-  const right = Math.max(...targets);
-  const railY = 30;
-  const radius = 3;
+  const columnWidth = 300;
+  const gap = 40;
+  const sidePadding = 20;
+  const totalWidth = Math.max(columnWidth + sidePadding * 2, childCount * columnWidth + Math.max(0, childCount - 1) * gap + sidePadding * 2);
+  const startX = totalWidth / 2;
 
-  function routeTo(x: number) {
-    if (childCount === 1) return "M50 0 V80";
-    if (x < 50) return `M50 0 V${railY - radius} Q50 ${railY} ${50 - radius} ${railY} H${x + radius} Q${x} ${railY} ${x} ${railY + radius} V80`;
-    return `M50 0 V${railY - radius} Q50 ${railY} ${50 + radius} ${railY} H${x - radius} Q${x} ${railY} ${x} ${railY + radius} V80`;
-  }
-
-  return <div className="relative h-20 w-full min-w-full">
-    <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 80" preserveAspectRatio="none">
-      <defs><filter id={`topology-glow-${depth}-${childCount}`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
-      <path d={childCount === 1 ? "M50 0 V80" : `M50 0 V${railY} M${left} ${railY} H${right}`} fill="none" stroke="rgba(103,232,249,.18)" strokeWidth="1.1" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
-      {targets.map((x, index) => <path key={`drop-${index}`} d={childCount === 1 ? "" : `M${x} ${railY} V80`} fill="none" stroke="rgba(103,232,249,.18)" strokeWidth="1.1" vectorEffect="non-scaling-stroke" strokeLinecap="round" />)}
-      {targets.map((x, index) => {
-        if (!activeFlags[index]) return null;
-        const d = routeTo(x);
-        return <g key={`active-${index}`}>
-          <path d={d} fill="none" stroke="rgba(103,232,249,.98)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 30" filter={`url(#topology-glow-${depth}-${childCount})`}>
-            <animate attributeName="stroke-dashoffset" from="0" to="-128" dur="4.8s" begin={`${index * 0.18}s`} repeatCount="indefinite" />
-          </path>
-          <path d={d} fill="none" stroke="rgba(52,211,153,.68)" strokeWidth="1.1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1 44">
-            <animate attributeName="stroke-dashoffset" from="-18" to="-146" dur="4.8s" begin={`${index * 0.18}s`} repeatCount="indefinite" />
-          </path>
+  return <div className="relative h-24 w-full min-w-full">
+    <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox={`0 0 ${totalWidth} 96`} preserveAspectRatio="none">
+      <defs><filter id={`topology-glow-${depth}-${childCount}`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+      {Array.from({ length: childCount }).map((_, index) => {
+        const visualIndex = childCount - 1 - index;
+        const endX = sidePadding + columnWidth / 2 + visualIndex * (columnWidth + gap);
+        const bendY = childCount === 1 ? 48 : 40 + Math.min(18, Math.abs(endX - startX) / 18);
+        const d = childCount === 1
+          ? `M${startX} 0 C${startX - 18} 28 ${startX + 18} 64 ${endX} 96`
+          : `M${startX} 0 C${startX} 30 ${endX} ${bendY} ${endX} 96`;
+        const active = !!activeFlags[index];
+        return <g key={index}>
+          <path d={d} fill="none" stroke={active ? "rgba(103,232,249,.34)" : "rgba(103,232,249,.16)"} strokeWidth={active ? 1.55 : 1.1} vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+          {active && <>
+            <path d={d} fill="none" stroke="rgba(103,232,249,.98)" strokeWidth="2.4" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="2 30" filter={`url(#topology-glow-${depth}-${childCount})`}>
+              <animate attributeName="stroke-dashoffset" from="0" to="-128" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" />
+            </path>
+            <path d={d} fill="none" stroke="rgba(52,211,153,.7)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="1 44">
+              <animate attributeName="stroke-dashoffset" from="-18" to="-146" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" />
+            </path>
+          </>}
         </g>;
       })}
     </svg>
