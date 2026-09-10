@@ -5,7 +5,6 @@ import { priorityMeta, statusMeta, type Assignment, type WorkType } from "../v2/
 import { roleOf, type OrgState, type OrgUser } from "./orgModel";
 import { StatusChip } from "./WorkDetail";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 type CompletedReportPeriod = "weekly" | "monthly";
 
 function escapeHtml(value: string) {
@@ -15,6 +14,18 @@ function escapeHtml(value: string) {
 function localDateValue(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function dateValue(date: Date) {
+  return localDateValue(date);
+}
+
+function initialRange(period: CompletedReportPeriod, anchor = new Date()) {
+  const to = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  const from = period === "weekly"
+    ? new Date(to.getFullYear(), to.getMonth(), to.getDate() - 6)
+    : new Date(to.getFullYear(), to.getMonth(), 1);
+  return { from: dateValue(from), to: dateValue(to) };
 }
 
 function parseReportDate(value: string) {
@@ -33,18 +44,12 @@ function completionTime(item: Assignment) {
   return doneUpdates[0]?.at ?? item.updatedAt;
 }
 
-function inReportPeriod(value: string, reportDate: string, period: CompletedReportPeriod) {
+function inDateRange(value: string, fromDate: string, toDate: string) {
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return false;
-  const selected = parseReportDate(reportDate);
-  if (period === "monthly") {
-    const start = new Date(selected.getFullYear(), selected.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const end = new Date(selected.getFullYear(), selected.getMonth() + 1, 1, 0, 0, 0, 0).getTime();
-    return timestamp >= start && timestamp < end;
-  }
-  const end = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate() + 1, 0, 0, 0, 0).getTime();
-  const start = end - 7 * DAY_MS;
-  return timestamp >= start && timestamp < end;
+  const start = new Date(`${fromDate}T00:00:00`).getTime();
+  const end = new Date(`${toDate}T23:59:59.999`).getTime();
+  return Number.isFinite(start) && Number.isFinite(end) && timestamp >= start && timestamp <= end;
 }
 
 function reportRowText(item: Assignment) {
@@ -54,10 +59,11 @@ function reportRowText(item: Assignment) {
   return `${title}${details ? ` ${details}` : ""}`;
 }
 
-function completedReportHtml(rows: Assignment[], org: OrgState, departmentId: string, period: CompletedReportPeriod, reportDate: string) {
+function completedReportHtml(rows: Assignment[], org: OrgState, departmentId: string, period: CompletedReportPeriod, fromDate: string, toDate: string) {
   const selectedDepartment = departmentId === "all" ? "جميع الأقسام" : org.departments.find((d) => d.id === departmentId)?.name ?? "القسم";
   const headline = period === "weekly" ? "تقرير الأعمال الأسبوعي" : "تقرير الأعمال الشهري";
   const bodyRows = rows.map((item) => `<tr><td>${escapeHtml(reportRowText(item))}</td></tr>`).join("");
+  const rangeLabel = fromDate === toDate ? fmtReportDate(fromDate) : `من ${fmtReportDate(fromDate)} إلى ${fmtReportDate(toDate)}`;
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -83,20 +89,20 @@ th { background: #d9eaf7; text-align: center; font-size: 13pt; font-weight: 700;
 </head>
 <body>
 <div class="report">
-  <div class="date">التاريخ: ${escapeHtml(fmtReportDate(reportDate))}</div>
+  <div class="date">التاريخ: ${escapeHtml(rangeLabel)}</div>
   <h1>${escapeHtml(headline)}</h1>
   <h2>الأعمال المنجزة</h2>
   <div class="department">${escapeHtml(selectedDepartment)}</div>
   <table>
     <thead><tr><th>الأعمال المنجزة</th></tr></thead>
-    <tbody>${bodyRows || '<tr><td class="empty">لا توجد أعمال منجزة أو مهام قيد التنفيذ ضمن الاختيار الحالي.</td></tr>'}</tbody>
+    <tbody>${bodyRows || '<tr><td class="empty">لا توجد أعمال منجزة أو مهام قيد التنفيذ ضمن الفترة المحددة.</td></tr>'}</tbody>
   </table>
 </div>
 </body>
 </html>`;
 }
 
-function printCompletedReport(rows: Assignment[], org: OrgState, departmentId: string, period: CompletedReportPeriod, reportDate: string) {
+function printCompletedReport(rows: Assignment[], org: OrgState, departmentId: string, period: CompletedReportPeriod, fromDate: string, toDate: string) {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.position = "fixed";
@@ -119,7 +125,7 @@ function printCompletedReport(rows: Assignment[], org: OrgState, departmentId: s
   }
 
   printDocument.open();
-  printDocument.write(completedReportHtml(rows, org, departmentId, period, reportDate));
+  printDocument.write(completedReportHtml(rows, org, departmentId, period, fromDate, toDate));
   printDocument.close();
 
   window.setTimeout(() => {
@@ -145,19 +151,19 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
   const [status, setStatus] = useState("all");
   const [completedDepartmentId, setCompletedDepartmentId] = useState("all");
   const [completedPeriod, setCompletedPeriod] = useState<CompletedReportPeriod>("weekly");
-  const [completedReportDate, setCompletedReportDate] = useState(() => localDateValue());
+  const initial = initialRange("weekly");
+  const [completedFromDate, setCompletedFromDate] = useState(initial.from);
+  const [completedToDate, setCompletedToDate] = useState(initial.to);
   const [showCompletedReport, setShowCompletedReport] = useState(isDiwan);
 
-  // The report-only Diwan role gets the authoritative shared task source strictly inside
-  // the report engine. Its normal dashboard/work-list scope remains restricted by App.tsx.
   const reportSourceItems = isDiwan ? reportItems : items;
 
   const rows = useMemo(() => reportSourceItems.filter((i) => (kind === "all" || i.kind === kind) && (departmentId === "all" || i.departmentId === departmentId) && (assigneeId === "all" || i.assigneeId === assigneeId) && (status === "all" || i.status === status)), [reportSourceItems, kind, departmentId, assigneeId, status]);
 
   const completedReportRows = useMemo(() => {
     const departmentMatch = (item: Assignment) => completedDepartmentId === "all" || item.departmentId === completedDepartmentId;
-    const completed = reportSourceItems.filter((item) => item.status === "done" && departmentMatch(item) && inReportPeriod(completionTime(item), completedReportDate, completedPeriod));
-    const activeTasks = reportSourceItems.filter((item) => item.kind === "task" && item.status === "active" && !item.archivedAt && departmentMatch(item));
+    const completed = reportSourceItems.filter((item) => item.status === "done" && departmentMatch(item) && inDateRange(completionTime(item), completedFromDate, completedToDate));
+    const activeTasks = reportSourceItems.filter((item) => item.kind === "task" && item.status === "active" && !item.archivedAt && departmentMatch(item) && inDateRange(item.updatedAt, completedFromDate, completedToDate));
     const byId = new Map<string, Assignment>();
     [...completed, ...activeTasks].forEach((item) => byId.set(item.id, item));
     return [...byId.values()].sort((a, b) => {
@@ -165,7 +171,14 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
       const bTime = b.status === "done" ? completionTime(b) : b.updatedAt;
       return aTime.localeCompare(bTime);
     });
-  }, [reportSourceItems, completedDepartmentId, completedPeriod, completedReportDate]);
+  }, [reportSourceItems, completedDepartmentId, completedFromDate, completedToDate]);
+
+  function changeCompletedPeriod(next: CompletedReportPeriod) {
+    setCompletedPeriod(next);
+    const range = initialRange(next);
+    setCompletedFromDate(range.from);
+    setCompletedToDate(range.to);
+  }
 
   function exportExcel() {
     const data = rows.map((i) => ({ النوع: i.kind === "project" ? "مشروع" : "مهمة", الاسم: i.title, القسم: org.departments.find((d) => d.id === i.departmentId)?.name ?? "", "المسند إليه": org.users.find((u) => u.id === i.assigneeId)?.name ?? "", الحالة: statusMeta[i.status].label, الأولوية: priorityMeta[i.priority], الموقع: i.location ?? "", المرجع: i.referenceNumber ?? "" }));
@@ -177,6 +190,8 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
 
   const reportHeadline = completedPeriod === "weekly" ? "تقرير الأعمال الأسبوعي" : "تقرير الأعمال الشهري";
   const reportDepartment = completedDepartmentId === "all" ? "جميع الأقسام" : org.departments.find((d) => d.id === completedDepartmentId)?.name ?? "القسم";
+  const dateRangeValid = completedFromDate <= completedToDate;
+  const reportRangeLabel = completedFromDate === completedToDate ? fmtReportDate(completedFromDate) : `من ${fmtReportDate(completedFromDate)} إلى ${fmtReportDate(completedToDate)}`;
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -192,29 +207,31 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
     </div>
 
     {showCompletedReport && <section className="tech-panel overflow-hidden border-cyan-300/15">
-      <div className="grid gap-5 border-b border-white/7 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,620px)] lg:items-end">
+      <div className="grid gap-5 border-b border-white/7 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,820px)] xl:items-end">
         <div className="min-w-0 text-right" dir="rtl">
           <div className="text-[10px] font-black tracking-[.16em] text-cyan-300/60">COMPLETED WORK REPORT</div>
           <h2 className="mt-2 text-lg font-black">تقرير الأعمال المنجزة</h2>
-          <p className="mt-1 max-w-2xl text-[10px] leading-5 text-slate-500">تقرير أسبوعي أو شهري حسب القالب المعتمد، مع الأعمال المنجزة والمهام النشطة الحالية فقط.</p>
+          <p className="mt-1 max-w-2xl text-[10px] leading-5 text-slate-500">اختر نوع التقرير والفترة من / إلى. الأعمال المنجزة والمهام النشطة تُحتسب ضمن الفترة المحددة فقط.</p>
         </div>
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" dir="rtl">
-          <select className="tech-field w-full min-w-0" value={completedPeriod} onChange={(e) => setCompletedPeriod(e.target.value as CompletedReportPeriod)}><option value="weekly">تقرير أسبوعي</option><option value="monthly">تقرير شهري</option></select>
-          <input type="date" className="tech-field w-full min-w-0" value={completedReportDate} onChange={(e) => setCompletedReportDate(e.target.value)} />
-          <select className="tech-field w-full min-w-0" value={completedDepartmentId} onChange={(e) => setCompletedDepartmentId(e.target.value)}><option value="all">جميع الأقسام</option>{org.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select>
-          <button type="button" disabled={completedReportRows.length === 0} onClick={() => printCompletedReport(completedReportRows, org, completedDepartmentId, completedPeriod, completedReportDate)} className="report-action w-full min-w-0 justify-center whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"><Printer size={14} />طباعة / حفظ PDF</button>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" dir="rtl">
+          <select className="tech-field w-full min-w-0" value={completedPeriod} onChange={(e) => changeCompletedPeriod(e.target.value as CompletedReportPeriod)}><option value="weekly">تقرير أسبوعي</option><option value="monthly">تقرير شهري</option></select>
+          <label className="min-w-0"><span className="mb-1 block text-[9px] font-bold text-slate-500">من تاريخ</span><input type="date" className="tech-field w-full min-w-0" value={completedFromDate} max={completedToDate} onChange={(e) => setCompletedFromDate(e.target.value)} /></label>
+          <label className="min-w-0"><span className="mb-1 block text-[9px] font-bold text-slate-500">إلى تاريخ</span><input type="date" className="tech-field w-full min-w-0" value={completedToDate} min={completedFromDate} onChange={(e) => setCompletedToDate(e.target.value)} /></label>
+          <select className="tech-field w-full min-w-0 self-end" value={completedDepartmentId} onChange={(e) => setCompletedDepartmentId(e.target.value)}><option value="all">جميع الأقسام</option>{org.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select>
+          <button type="button" disabled={!dateRangeValid || completedReportRows.length === 0} onClick={() => printCompletedReport(completedReportRows, org, completedDepartmentId, completedPeriod, completedFromDate, completedToDate)} className="report-action w-full min-w-0 self-end justify-center whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"><Printer size={14} />طباعة / حفظ PDF</button>
         </div>
       </div>
+      {!dateRangeValid && <div className="border-b border-rose-300/10 bg-rose-300/[0.035] px-5 py-2 text-[10px] font-bold text-rose-300">تاريخ البداية يجب أن يكون قبل أو مساوياً لتاريخ النهاية.</div>}
       <div className="p-5">
         <div className="mx-auto max-w-5xl rounded-[2px] bg-white px-5 py-10 text-slate-950 shadow-2xl sm:px-10" dir="rtl">
-          <div className="mb-6 text-right text-[11px]">التاريخ: {fmtReportDate(completedReportDate)}</div>
+          <div className="mb-6 text-right text-[11px]">التاريخ: {reportRangeLabel}</div>
           <div className="text-center"><div className="text-xl font-black">{reportHeadline}</div><div className="mt-3 text-base">الأعمال المنجزة</div><div className="mt-2 text-[11px] text-slate-600">{reportDepartment}</div></div>
           <div className="mt-10 overflow-x-auto">
             <table className="w-full min-w-[560px] table-fixed border-collapse text-right text-[12px]"><thead><tr><th className="border border-slate-500 bg-[#d9eaf7] p-3 text-center">الأعمال المنجزة</th></tr></thead><tbody>{completedReportRows.map((item) => <tr key={item.id}><td className="border border-slate-500 p-3 align-middle leading-6">{reportRowText(item)}</td></tr>)}</tbody></table>
-            {completedReportRows.length === 0 && <div className="border border-t-0 border-slate-500 p-8 text-center text-sm text-slate-500">لا توجد أعمال منجزة أو مهام قيد التنفيذ ضمن هذا الاختيار.</div>}
+            {completedReportRows.length === 0 && <div className="border border-t-0 border-slate-500 p-8 text-center text-sm text-slate-500">لا توجد أعمال منجزة أو مهام قيد التنفيذ ضمن الفترة المحددة.</div>}
           </div>
         </div>
-        <div className="mt-3 text-center text-[9px] text-slate-600">الأعمال المنجزة ضمن الفترة + المهام النشطة الحالية: {completedReportRows.length}</div>
+        <div className="mt-3 text-center text-[9px] text-slate-600">الأعمال ضمن الفترة المحددة: {completedReportRows.length}</div>
       </div>
     </section>}
 
