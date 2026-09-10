@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { Download, FileDown, FileSpreadsheet, Printer } from "lucide-react";
 import { priorityMeta, statusMeta, type Assignment, type WorkType } from "../v2/model";
-import type { OrgState, OrgUser } from "./orgModel";
+import { roleOf, type OrgState, type OrgUser } from "./orgModel";
+import { useLiveAppState } from "./liveState";
 import { StatusChip } from "./WorkDetail";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -136,6 +137,7 @@ function printCompletedReport(rows: Assignment[], org: OrgState, departmentId: s
 }
 
 export default function Reports({ items, org, currentUser }: { items: Assignment[]; org: OrgState; currentUser: OrgUser }) {
+  const [liveApp] = useLiveAppState();
   const [kind, setKind] = useState<WorkType | "all">("all");
   const [departmentId, setDepartmentId] = useState("all");
   const [assigneeId, setAssigneeId] = useState("all");
@@ -145,12 +147,15 @@ export default function Reports({ items, org, currentUser }: { items: Assignment
   const [completedReportDate, setCompletedReportDate] = useState(() => localDateValue());
   const [showCompletedReport, setShowCompletedReport] = useState(false);
 
-  const rows = useMemo(() => items.filter((i) => (kind === "all" || i.kind === kind) && (departmentId === "all" || i.departmentId === departmentId) && (assigneeId === "all" || i.assigneeId === assigneeId) && (status === "all" || i.status === status)), [items, kind, departmentId, assigneeId, status]);
+  const isDiwan = roleOf(org, currentUser)?.key === "diwan";
+  const reportSourceItems = isDiwan ? liveApp.tasks : items;
+
+  const rows = useMemo(() => reportSourceItems.filter((i) => (kind === "all" || i.kind === kind) && (departmentId === "all" || i.departmentId === departmentId) && (assigneeId === "all" || i.assigneeId === assigneeId) && (status === "all" || i.status === status)), [reportSourceItems, kind, departmentId, assigneeId, status]);
 
   const completedReportRows = useMemo(() => {
     const departmentMatch = (item: Assignment) => completedDepartmentId === "all" || item.departmentId === completedDepartmentId;
-    const completed = items.filter((item) => item.status === "done" && departmentMatch(item) && inReportPeriod(completionTime(item), completedReportDate, completedPeriod));
-    const activeTasks = items.filter((item) => item.kind === "task" && item.status === "active" && !item.archivedAt && departmentMatch(item));
+    const completed = reportSourceItems.filter((item) => item.status === "done" && departmentMatch(item) && inReportPeriod(completionTime(item), completedReportDate, completedPeriod));
+    const activeTasks = reportSourceItems.filter((item) => item.kind === "task" && item.status === "active" && !item.archivedAt && departmentMatch(item));
     const byId = new Map<string, Assignment>();
     [...completed, ...activeTasks].forEach((item) => byId.set(item.id, item));
     return [...byId.values()].sort((a, b) => {
@@ -158,7 +163,7 @@ export default function Reports({ items, org, currentUser }: { items: Assignment
       const bTime = b.status === "done" ? completionTime(b) : b.updatedAt;
       return aTime.localeCompare(bTime);
     });
-  }, [items, completedDepartmentId, completedPeriod, completedReportDate]);
+  }, [reportSourceItems, completedDepartmentId, completedPeriod, completedReportDate]);
 
   function exportExcel() {
     const data = rows.map((i) => ({ النوع: i.kind === "project" ? "مشروع" : "مهمة", الاسم: i.title, القسم: org.departments.find((d) => d.id === i.departmentId)?.name ?? "", "المسند إليه": org.users.find((u) => u.id === i.assigneeId)?.name ?? "", الحالة: statusMeta[i.status].label, الأولوية: priorityMeta[i.priority], الموقع: i.location ?? "", المرجع: i.referenceNumber ?? "" }));
@@ -170,7 +175,7 @@ export default function Reports({ items, org, currentUser }: { items: Assignment
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div><div className="text-[10px] tracking-[.2em] text-cyan-300/50">REPORT ENGINE</div><h1 className="mt-2 text-2xl font-black">التقارير</h1><p className="mt-1 text-xs text-slate-500">تقارير حسب القسم والشخص والحالة ونوع العمل.</p></div>
+      <div><div className="text-[10px] tracking-[.2em] text-cyan-300/50">REPORT ENGINE</div><h1 className="mt-2 text-2xl font-black">التقارير</h1><p className="mt-1 text-xs text-slate-500">{isDiwan ? "وصول مخصص للتقارير فقط لجميع الأقسام دون إظهار الأعمال على لوحة المتابعة." : "تقارير حسب القسم والشخص والحالة ونوع العمل."}</p></div>
       <div className="flex flex-wrap gap-2"><button onClick={() => setShowCompletedReport((value) => !value)} className="report-action border-cyan-300/20 text-cyan-200"><FileDown size={14} />تقرير الأعمال المنجزة</button><button onClick={() => window.print()} className="report-action"><Printer size={14} />طباعة / PDF</button><button onClick={exportExcel} className="report-action"><FileSpreadsheet size={14} />Excel</button><button onClick={() => exportCsv(rows, org)} className="report-action"><Download size={14} />CSV</button></div>
     </div>
 
