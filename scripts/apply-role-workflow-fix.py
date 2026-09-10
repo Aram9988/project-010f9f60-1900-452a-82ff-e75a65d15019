@@ -6,6 +6,7 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
         raise SystemExit(f"missing replacement: {label}")
     return text.replace(old, new, 1)
 
+
 app_path = Path("src/v8/App.tsx")
 app = app_path.read_text()
 app = replace_once(
@@ -34,16 +35,6 @@ app = replace_once(
     const message = status === "active" ? `تم استلام وبدء تنفيذ: ${item.title}` : status === "review" ? `تم إنجاز العمل وإرساله للموافقة: ${item.title}` : status === "done" ? `تمت الموافقة على الإنجاز وإغلاق العمل: ${item.title}` : status === "returned" ? `أعيد العمل للتعديل: ${item.title}` : `تحديث على: ${item.title}`;
     recipients.forEach((id) => notify(id, message, item.id));''',
     'approval notification routing',
-)
-app = replace_once(
-    app,
-    '''function assignableUsers(org: OrgState, currentUser: OrgUser) {
-  if (hasPermission(org, currentUser, "assign_department_tasks")) return org.users.filter((u) => u.active && roleOf(org, u)?.key !== "branch_head");''',
-    '''function assignableUsers(org: OrgState, currentUser: OrgUser) {
-  const currentRole = roleOf(org, currentUser);
-  if (currentRole?.key === "branch_head" || currentRole?.name?.trim() === "رئيس الفرع") return org.users.filter((u) => u.active && u.managerId === currentUser.id);
-  if (hasPermission(org, currentUser, "assign_department_tasks")) return org.users.filter((u) => u.active && roleOf(org, u)?.key !== "branch_head");''',
-    'branch-head direct reports',
 )
 app_path.write_text(app)
 
@@ -111,3 +102,83 @@ wd = replace_once(
     'workflow buttons',
 )
 wd_path.write_text(wd)
+
+tree_path = Path("src/v8/TeamTree.tsx")
+tree = tree_path.read_text()
+tree = replace_once(
+    tree,
+    '        <div className="text-[10px] text-slate-600">الخطوط منحنية كمسارات شبكة حقيقية، والموجة تظهر فقط على الطريق المؤدي إلى عمل نشط. في ملء الشاشة استخدم عجلة الماوس للتكبير والتصغير واسحب لتحريك المخطط.</div>',
+    '        <div className="text-[10px] text-slate-600">خطوط تنظيمية واضحة بدون تقاطعات؛ كل موظف يتصل مباشرة بمسؤوله، وتظهر حركة الإشارة فقط على المسار المؤدي إلى عمل نشط. في ملء الشاشة استخدم عجلة الماوس للتكبير والتصغير واسحب لتحريك المخطط.</div>',
+    'topology helper text',
+)
+tree = replace_once(
+    tree,
+    '''function CurvedStem() {
+  return <svg aria-hidden="true" className="h-14 w-28 overflow-visible" viewBox="0 0 100 56"><path d="M50 0 C35 16 65 36 50 56" fill="none" stroke="rgba(103,232,249,.24)" strokeWidth="1.4" strokeLinecap="round" /></svg>;
+}''',
+    '''function CurvedStem() {
+  return <svg aria-hidden="true" className="h-14 w-28 overflow-visible" viewBox="0 0 100 56"><path d="M50 0 V56" fill="none" stroke="rgba(103,232,249,.24)" strokeWidth="1.4" strokeLinecap="round" /></svg>;
+}''',
+    'root connector',
+)
+tree = replace_once(
+    tree,
+    '''function TopologyConnectorFan({ childCount, activeFlags, depth }: { childCount: number; activeFlags: boolean[]; depth: number }) {
+  return <div className="relative h-20 w-full min-w-full">
+    <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 80" preserveAspectRatio="none">
+      <defs><filter id={`topology-glow-${depth}-${childCount}`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+      {Array.from({ length: childCount }).map((_, index) => {
+        const x = ((childCount - index - 0.5) / childCount) * 100;
+        const d = childCount === 1 ? "M50 0 C38 20 62 52 50 80" : `M50 0 C50 28 ${x} 26 ${x} 80`;
+        const active = !!activeFlags[index];
+        return <g key={index}>
+          <path d={d} fill="none" stroke={active ? "rgba(103,232,249,.34)" : "rgba(103,232,249,.16)"} strokeWidth={active ? 1.55 : 1.1} vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+          {active && <>
+            <path d={d} fill="none" stroke="rgba(103,232,249,.98)" strokeWidth="2.4" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="2 30" filter={`url(#topology-glow-${depth}-${childCount})`}>
+              <animate attributeName="stroke-dashoffset" from="0" to="-128" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" />
+            </path>
+            <path d={d} fill="none" stroke="rgba(52,211,153,.7)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="1 44">
+              <animate attributeName="stroke-dashoffset" from="-18" to="-146" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" />
+            </path>
+          </>}
+        </g>;
+      })}
+    </svg>
+  </div>;
+}''',
+    '''function TopologyConnectorFan({ childCount, activeFlags, depth }: { childCount: number; activeFlags: boolean[]; depth: number }) {
+  const targets = Array.from({ length: childCount }, (_, index) => ((childCount - index - 0.5) / childCount) * 100);
+  const left = Math.min(...targets);
+  const right = Math.max(...targets);
+  const railY = 30;
+  const radius = 3;
+
+  function routeTo(x: number) {
+    if (childCount === 1) return "M50 0 V80";
+    if (x < 50) return `M50 0 V${railY - radius} Q50 ${railY} ${50 - radius} ${railY} H${x + radius} Q${x} ${railY} ${x} ${railY + radius} V80`;
+    return `M50 0 V${railY - radius} Q50 ${railY} ${50 + radius} ${railY} H${x - radius} Q${x} ${railY} ${x} ${railY + radius} V80`;
+  }
+
+  return <div className="relative h-20 w-full min-w-full">
+    <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 80" preserveAspectRatio="none">
+      <defs><filter id={`topology-glow-${depth}-${childCount}`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+      <path d={childCount === 1 ? "M50 0 V80" : `M50 0 V${railY} M${left} ${railY} H${right}`} fill="none" stroke="rgba(103,232,249,.18)" strokeWidth="1.1" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+      {targets.map((x, index) => <path key={`drop-${index}`} d={childCount === 1 ? "" : `M${x} ${railY} V80`} fill="none" stroke="rgba(103,232,249,.18)" strokeWidth="1.1" vectorEffect="non-scaling-stroke" strokeLinecap="round" />)}
+      {targets.map((x, index) => {
+        if (!activeFlags[index]) return null;
+        const d = routeTo(x);
+        return <g key={`active-${index}`}>
+          <path d={d} fill="none" stroke="rgba(103,232,249,.98)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 30" filter={`url(#topology-glow-${depth}-${childCount})`}>
+            <animate attributeName="stroke-dashoffset" from="0" to="-128" dur="4.8s" begin={`${index * 0.18}s`} repeatCount="indefinite" />
+          </path>
+          <path d={d} fill="none" stroke="rgba(52,211,153,.68)" strokeWidth="1.1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1 44">
+            <animate attributeName="stroke-dashoffset" from="-18" to="-146" dur="4.8s" begin={`${index * 0.18}s`} repeatCount="indefinite" />
+          </path>
+        </g>;
+      })}
+    </svg>
+  </div>;
+}''',
+    'clean topology fan',
+)
+tree_path.write_text(tree)
