@@ -70,7 +70,7 @@ function Shell({ org, setOrg, app, setApp, currentUser, onLogout }: { org: OrgSt
     const assignee = org.users.find((u) => u.id === input.assigneeId);
     const departmentId = assignee ? (assignee.departmentId ?? "") : (input.departmentId || currentUser.departmentId || "");
     const department = org.departments.find((d) => d.id === departmentId);
-    const ownerId = department?.headUserId || (assignee && !departmentId ? currentUser.id : currentUser.id);
+    const ownerId = department?.headUserId || assignee?.managerId || currentUser.id;
     const assignedToId = input.assigneeId || ownerId;
     const item: Assignment = {
       id: uid(), number: `${input.kind === "project" ? "PR" : "TS"}-${String(3000 + app.tasks.length + 1)}`, kind: input.kind,
@@ -89,10 +89,17 @@ function Shell({ org, setOrg, app, setApp, currentUser, onLogout }: { org: OrgSt
     const at = nowIso();
     const update: UpdateEntry = { id: uid(), authorId: currentUser.id, text, at, status, attachment };
     setApp((s) => ({ ...s, tasks: s.tasks.map((x) => x.id === item.id ? { ...x, status: status ?? x.status, acceptedAt: status === "active" ? at : x.acceptedAt, acceptedById: status === "active" ? currentUser.id : x.acceptedById, acceptedAssigneeId: status === "active" ? (x.assigneeId ?? x.ownerId) : x.acceptedAssigneeId, updatedAt: at, updates: [...x.updates, update] } : x) }));
-    const branchHead = org.users.find((u) => roleOf(org, u)?.key === "branch_head");
+    const branchHead = org.users.find((u) => roleOf(org, u)?.key === "branch_head" || roleOf(org, u)?.name?.trim() === "رئيس الفرع");
     const recipients = new Set<string>();
-    [item.issuedById, item.ownerId, item.assigneeId, branchHead?.id].forEach((id) => { if (id && id !== currentUser.id) recipients.add(id); });
-    const message = status === "active" ? `تم استلام وبدء تنفيذ: ${item.title}` : status === "review" ? `تم إرسال العمل للاعتماد: ${item.title}` : status === "done" ? `تم إنهاء واعتماد: ${item.title}` : status === "returned" ? `أعيد العمل للتعديل: ${item.title}` : `تحديث على: ${item.title}`;
+    if (status === "review") {
+      const submitterManager = currentUser.managerId ? org.users.find((u) => u.id === currentUser.managerId && u.active) : undefined;
+      const departmentHeadId = item.departmentId ? org.departments.find((d) => d.id === item.departmentId)?.headUserId : undefined;
+      const approvalTargetId = submitterManager?.id || departmentHeadId || branchHead?.id;
+      if (approvalTargetId && approvalTargetId !== currentUser.id) recipients.add(approvalTargetId);
+    } else {
+      [item.issuedById, item.ownerId, item.assigneeId, branchHead?.id].forEach((id) => { if (id && id !== currentUser.id) recipients.add(id); });
+    }
+    const message = status === "active" ? `تم استلام وبدء تنفيذ: ${item.title}` : status === "review" ? `تم إنجاز العمل وإرساله للموافقة: ${item.title}` : status === "done" ? `تمت الموافقة على الإنجاز وإغلاق العمل: ${item.title}` : status === "returned" ? `أعيد العمل للتعديل: ${item.title}` : `تحديث على: ${item.title}`;
     recipients.forEach((id) => notify(id, message, item.id));
   }
 

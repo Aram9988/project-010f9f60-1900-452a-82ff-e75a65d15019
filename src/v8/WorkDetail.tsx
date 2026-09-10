@@ -50,14 +50,21 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
   const isProject = item.kind === "project";
   const noun = isProject ? "المشروع" : "المهمة";
   const currentRole = roleOf(org, currentUser);
-  const isBranch = currentRole?.key === "branch_head";
-  const isDept = currentRole?.key === "department_head";
-  const isOffice = currentRole?.key === "office_responsible";
+  const isBranch = currentRole?.key === "branch_head" || currentRole?.name?.trim() === "رئيس الفرع";
+  const isDept = currentRole?.key === "department_head" || currentRole?.name?.includes("رئيس قسم") === true;
+  const isOffice = currentRole?.key === "office_responsible" || currentRole?.name?.includes("مسؤول مكتب") === true;
   const readOnlyProject = isProject && isOffice;
 
   const assignee = org.users.find((u) => u.id === item.assigneeId);
   const owner = org.users.find((u) => u.id === item.ownerId);
   const dept = org.departments.find((d) => d.id === item.departmentId);
+  const branch = org.users.find((u) => roleOf(org, u)?.key === "branch_head" || roleOf(org, u)?.name?.trim() === "رئيس الفرع");
+  const deptHead = dept?.headUserId ? org.users.find((u) => u.id === dept.headUserId) : undefined;
+  const assigneeRole = assignee ? roleOf(org, assignee) : undefined;
+  const assigneeIsBranch = assigneeRole?.key === "branch_head" || assigneeRole?.name?.trim() === "رئيس الفرع";
+  const configuredManager = assignee?.managerId ? org.users.find((u) => u.id === assignee.managerId && u.active) : undefined;
+  const approvalTarget = assigneeIsBranch ? undefined : configuredManager ?? deptHead ?? branch;
+  const approvalTargetId = approvalTarget?.id;
   const parent = item.parentProjectId ? allItems.find((x) => x.id === item.parentProjectId) : undefined;
   const children = isProject ? allItems.filter((x) => x.kind === "task" && x.parentProjectId === item.id) : [];
 
@@ -73,13 +80,11 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
   const canAssignByRole = !readOnlyProject && (hasPermission(org, currentUser, "assign_department_tasks") || hasPermission(org, currentUser, "assign_team_tasks"));
   const canAssign = !item.archivedAt && !isProject && canAssignByRole && assignmentAccepted && parentAccepted;
   const canWork = !item.archivedAt && !readOnlyProject && assignmentAccepted && item.status !== "done" && (assignedToMe || item.ownerId === currentUser.id || canAssignByRole);
-  const officeCanComplete = !isProject && isOffice && assignedToMe && canWork && ["active", "waiting"].includes(item.status);
-  const canApprove = !readOnlyProject && (isBranch || (!isProject && isDept && item.departmentId === currentUser.departmentId));
+  const canSubmitCompletion = assignedToMe && canWork && ["active", "waiting"].includes(item.status) && !!approvalTargetId && approvalTargetId !== currentUser.id;
+  const canCloseOwn = assignedToMe && canWork && ["active", "waiting"].includes(item.status) && !approvalTargetId;
+  const canApprove = !readOnlyProject && item.status === "review" && (approvalTargetId === currentUser.id || (!approvalTargetId && isBranch));
   const canLifecycle = isBranch || (!isProject && isDept && item.departmentId === currentUser.departmentId);
   const canReopen = canLifecycle && !item.archivedAt && item.status === "done";
-
-  const branch = org.users.find((u) => roleOf(org, u)?.key === "branch_head");
-  const deptHead = dept?.headUserId ? org.users.find((u) => u.id === dept.headUserId) : undefined;
   const visibleDirectUpdates = readOnlyProject ? item.updates.filter((u) => u.authorId === branch?.id || u.authorId === deptHead?.id) : item.updates;
   const timeline: TimelineEntry[] = isProject
     ? [
@@ -123,15 +128,16 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
           {item.status === "returned" && !item.archivedAt && <Notice tone="rose">أعيد العمل للتعديل. يجب على {assignee?.name ?? owner?.name ?? "المسؤول"} تأكيد الاستلام مرة أخرى قبل استئناف التنفيذ أو إعادة توزيعه.</Notice>}
           {!isProject && parent && !parentAccepted && <Notice tone="amber">المشروع المرتبط «{parent.title}» لم يتم استلامه بعد أو ينتظر إعادة استلام. لذلك لا يمكن إعادة إسناد هذه المهمة حتى يتم تأكيد استلام المشروع أولاً.</Notice>}
           {readOnlyProject && <Notice tone="indigo">عرض المشروع لمسؤول المكتب للمتابعة فقط. تحديثات المهام المرتبطة تظهر هنا تلقائياً مع اسم المهمة، بينما تبقى إجراءات المشروع نفسه للقراءة فقط.</Notice>}
-          {isOffice && !isProject && <Notice tone="emerald">عند إنهاء المهمة اضغط «تم الإنجاز». سيصل إشعار إلى رئيس القسم، ولا يظهر لمسؤول المكتب زر «إرسال للاعتماد».</Notice>}
+          {isOffice && !isProject && <Notice tone="emerald">عند إنهاء المهمة اضغط «تم الإنجاز». ستنتقل المهمة إلى بانتظار الموافقة عند رئيس القسم، ولن تصبح منجزة إلا بعد اعتماده لها.</Notice>}
+          {item.status === "review" && approvalTarget && <Notice tone="indigo">تم إنجاز العمل من المنفذ وهو الآن بانتظار موافقة {approvalTarget.name}. لا يعتبر العمل منجزاً نهائياً قبل الاعتماد.</Notice>}
         </div>
 
         <div className="flex flex-wrap gap-2">
           {canAccept && <Primary onClick={() => onTransition(item, "active", item.status === "returned" ? `تم تأكيد استلام ${noun} بعد إعادته للتعديل واستئناف التنفيذ.` : `تم استلام ${noun} وبدء التنفيذ.`)}>تأكيد الاستلام وبدء التنفيذ</Primary>}
-          {canWork && !isOffice && ["active", "waiting"].includes(item.status) && <Primary onClick={() => onTransition(item, "review", `تم إرسال ${noun} للاعتماد.`)}>إرسال للاعتماد</Primary>}
-          {officeCanComplete && <Primary onClick={() => onTransition(item, "done", "تم إنجاز المهمة من قبل مسؤول المكتب وإبلاغ رئيس القسم.")}><CheckCircle2 size={14} />تم الإنجاز</Primary>}
-          {canApprove && !item.archivedAt && !["done", "new", "returned"].includes(item.status) && <Primary onClick={() => onTransition(item, "done", `تم اعتماد ${noun} وإنهاؤه.`)}><CheckCircle2 size={14} />اعتماد وإنهاء</Primary>}
-          {canApprove && !item.archivedAt && item.status === "review" && <button onClick={() => onTransition(item, "returned", `أعيد ${noun} للتعديل وبانتظار تأكيد الاستلام من المسؤول.`)} className="h-10 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 text-[11px] font-bold text-rose-300">إعادة للتعديل</button>}
+          {canSubmitCompletion && <Primary onClick={() => onTransition(item, "review", `تم إنجاز ${noun} وإرساله إلى ${approvalTarget?.name ?? "المسؤول الأعلى"} للموافقة.`)}><CheckCircle2 size={14} />تم الإنجاز</Primary>}
+          {canCloseOwn && <Primary onClick={() => onTransition(item, "done", `تم إنهاء ${noun} واعتماده.`)}><CheckCircle2 size={14} />إنهاء واعتماد</Primary>}
+          {canApprove && !item.archivedAt && <Primary onClick={() => onTransition(item, "done", `تمت الموافقة على إنجاز ${noun} وإغلاقه كمنجز.`)}><CheckCircle2 size={14} />موافقة وإغلاق كمنجز</Primary>}
+          {canApprove && !item.archivedAt && <button onClick={() => onTransition(item, "returned", `أعيد ${noun} للتعديل وبانتظار تأكيد الاستلام من المسؤول.`)} className="h-10 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 text-[11px] font-bold text-rose-300">إعادة للتعديل</button>}
           {canReopen && <button onClick={() => onReopen(item)} className="flex h-10 items-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/5 px-3 text-[11px] font-bold text-emerald-300"><RotateCcw size={13} />إعادة تفعيل</button>}
           {canLifecycle && item.archivedAt && <button onClick={() => onRestore(item)} className="flex h-10 items-center gap-2 rounded-xl border border-cyan-300/15 bg-cyan-300/5 px-3 text-[11px] font-bold text-cyan-300"><ArchiveRestore size={13} />استعادة من الأرشيف</button>}
           {canLifecycle && !item.archivedAt && <button onClick={() => onArchive(item)} className="flex h-10 items-center gap-2 rounded-xl border border-slate-300/12 bg-slate-300/5 px-3 text-[11px] font-bold text-slate-300"><Archive size={13} />أرشفة</button>}
