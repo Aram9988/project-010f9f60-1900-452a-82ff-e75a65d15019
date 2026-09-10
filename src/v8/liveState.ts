@@ -8,6 +8,7 @@ const CALL_STORAGE_KEY = "rif-dimashq-call-requests-v1";
 export const WORKSPACE_SYNC_KEY_STORAGE = "rif-dimashq-workspace-sync-key-v1";
 const SYNC_ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
 const POLL_MS = 2000;
+const LEGACY_DEMO_WORK_IDS = new Set(["a-1", "a-2", "a-3", "a-4", "a-5"]);
 
 type RemotePayload = { app?: AppState; org?: OrgState };
 type RemoteSnapshot = { payload?: RemotePayload; revision?: number; updated_at?: string; error?: string };
@@ -43,10 +44,12 @@ function repairAssignment(input: Assignment): Assignment {
 
 function normalizeAppState(value: Partial<AppState> | AppState): AppState {
   const seed = makeSeedState();
+  const sourceTasks = Array.isArray(value.tasks) ? value.tasks : seed.tasks;
+  const sourceNotices = Array.isArray(value.notices) ? value.notices : seed.notices;
   return {
     currentUserId: value.currentUserId || seed.currentUserId,
-    tasks: Array.isArray(value.tasks) ? value.tasks.map(repairAssignment) : seed.tasks.map(repairAssignment),
-    notices: Array.isArray(value.notices) ? value.notices : seed.notices,
+    tasks: sourceTasks.filter((item) => !LEGACY_DEMO_WORK_IDS.has(item.id)).map(repairAssignment),
+    notices: sourceNotices.filter((notice) => !notice.taskId || !LEGACY_DEMO_WORK_IDS.has(notice.taskId)),
     callRequests: Array.isArray(value.callRequests) ? value.callRequests : [],
   };
 }
