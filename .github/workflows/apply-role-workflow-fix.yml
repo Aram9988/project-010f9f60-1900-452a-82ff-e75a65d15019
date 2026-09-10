@@ -26,5 +26,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/v8/App.tsx src/v8/WorkDetail.tsx src/v8/TeamTree.tsx
-          git commit -m "Fix approval hierarchy and clean topology connectors [skip ci]"
+          git commit -m "Fix approval hierarchy and clean topology connectors"
           git push origin HEAD:main
