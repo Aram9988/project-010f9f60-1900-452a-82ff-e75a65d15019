@@ -3,7 +3,6 @@ import * as XLSX from "xlsx";
 import { Download, FileDown, FileSpreadsheet, Printer } from "lucide-react";
 import { priorityMeta, statusMeta, type Assignment, type WorkType } from "../v2/model";
 import { roleOf, type OrgState, type OrgUser } from "./orgModel";
-import { useLiveAppState } from "./liveState";
 import { StatusChip } from "./WorkDetail";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -136,8 +135,7 @@ function printCompletedReport(rows: Assignment[], org: OrgState, departmentId: s
   }, 300);
 }
 
-export default function Reports({ items, org, currentUser }: { items: Assignment[]; org: OrgState; currentUser: OrgUser }) {
-  const [liveApp] = useLiveAppState();
+export default function Reports({ items, reportItems, org, currentUser }: { items: Assignment[]; reportItems: Assignment[]; org: OrgState; currentUser: OrgUser }) {
   const currentRole = roleOf(org, currentUser);
   const isDiwan = currentRole?.key === "diwan" || currentRole?.name?.trim().includes("ديوان") === true;
 
@@ -150,11 +148,11 @@ export default function Reports({ items, org, currentUser }: { items: Assignment
   const [completedReportDate, setCompletedReportDate] = useState(() => localDateValue());
   const [showCompletedReport, setShowCompletedReport] = useState(isDiwan);
 
-  // Diwan is intentionally report-only. It gets the full shared work source here for
-  // report generation, while App.tsx still gives it an empty dashboard/work-list scope.
-  const reportSourceItems = isDiwan ? liveApp.tasks : items;
+  // The report-only Diwan role gets the authoritative shared task source strictly inside
+  // the report engine. Its normal dashboard/work-list scope remains restricted by App.tsx.
+  const reportSourceItems = isDiwan ? reportItems : items;
 
-  const rows = useMemo(() => items.filter((i) => (kind === "all" || i.kind === kind) && (departmentId === "all" || i.departmentId === departmentId) && (assigneeId === "all" || i.assigneeId === assigneeId) && (status === "all" || i.status === status)), [items, kind, departmentId, assigneeId, status]);
+  const rows = useMemo(() => reportSourceItems.filter((i) => (kind === "all" || i.kind === kind) && (departmentId === "all" || i.departmentId === departmentId) && (assigneeId === "all" || i.assigneeId === assigneeId) && (status === "all" || i.status === status)), [reportSourceItems, kind, departmentId, assigneeId, status]);
 
   const completedReportRows = useMemo(() => {
     const departmentMatch = (item: Assignment) => completedDepartmentId === "all" || item.departmentId === completedDepartmentId;
