@@ -1,4 +1,4 @@
-name: Apply role hierarchy workflow fix
+name: Apply role workflow patch
 
 on:
   push:
@@ -12,133 +12,16 @@ jobs:
   patch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Patch role-aware workflow and direct assignments
-        shell: bash
+      - name: Apply patch
+        run: python3 scripts/apply-role-workflow-fix.py
+      - name: Validate diff
+        run: git diff --check
+      - name: Commit patch
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          app_path = Path('src/v8/App.tsx')
-          app = app_path.read_text()
-
-          replacements = [
-            (
-              'const departmentId = assignee?.departmentId || input.departmentId || currentUser.departmentId || org.departments[0]?.id || "";',
-              'const departmentId = input.assigneeId ? (assignee?.departmentId ?? "") : (input.departmentId || currentUser.departmentId || org.departments[0]?.id || "");'
-            ),
-            (
-              'const ownerId = department?.headUserId || currentUser.id;',
-              'const ownerId = department?.headUserId || assignee?.managerId || currentUser.id;'
-            ),
-            (
-              'departmentId: assignee.departmentId ?? x.departmentId, status: "new",',
-              'departmentId: assignee.departmentId ?? "", status: "new",'
-            ),
-            (
-              'function assignableUsers(org: OrgState, currentUser: OrgUser) {\n  if (hasPermission(org, currentUser, "assign_department_tasks")) return org.users.filter((u) => u.active && roleOf(org, u)?.key !== "branch_head");',
-              'function assignableUsers(org: OrgState, currentUser: OrgUser) {\n  const currentRole = roleOf(org, currentUser);\n  if (currentRole?.key === "branch_head") return org.users.filter((u) => u.active && u.managerId === currentUser.id);\n  if (hasPermission(org, currentUser, "assign_department_tasks")) return org.users.filter((u) => u.active && roleOf(org, u)?.key !== "branch_head");'
-            ),
-          ]
-          for old, new in replacements:
-            if old not in app:
-              raise SystemExit(f'App replacement not found: {old[:100]}')
-            app = app.replace(old, new, 1)
-
-          # When work is submitted for approval, notify the submitter's configured manager first.
-          old = '''    const branchHead = org.users.find((u) => roleOf(org, u)?.key === "branch_head");
-    const recipients = new Set<string>();
-    [item.issuedById, item.ownerId, item.assigneeId, branchHead?.id].forEach((id) => { if (id && id !== currentUser.id) recipients.add(id); });
-    const message = status === "active" ? `تم استلام وبدء تنفيذ: ${item.title}` : status === "review" ? `تم إرسال العمل للاعتماد: ${item.title}` : status === "done" ? `تم إنهاء واعتماد: ${item.title}` : status === "returned" ? `أعيد العمل للتعديل: ${item.title}` : `تحديث على: ${item.title}`;
-    recipients.forEach((id) => notify(id, message, item.id));'''
-          new = '''    const branchHead = org.users.find((u) => roleOf(org, u)?.key === "branch_head");
-    const recipients = new Set<string>();
-    if (status === "review") {
-      const submitterManager = currentUser.managerId ? org.users.find((u) => u.id === currentUser.managerId && u.active) : undefined;
-      const departmentHead = item.departmentId ? org.departments.find((d) => d.id === item.departmentId)?.headUserId : undefined;
-      const approvalTargetId = submitterManager?.id || departmentHead || branchHead?.id;
-      if (approvalTargetId && approvalTargetId !== currentUser.id) recipients.add(approvalTargetId);
-    } else {
-      [item.issuedById, item.ownerId, item.assigneeId, branchHead?.id].forEach((id) => { if (id && id !== currentUser.id) recipients.add(id); });
-    }
-    const message = status === "active" ? `تم استلام وبدء تنفيذ: ${item.title}` : status === "review" ? `تم إنجاز العمل وإرساله للموافقة: ${item.title}` : status === "done" ? `تم إنهاء واعتماد: ${item.title}` : status === "returned" ? `أعيد العمل للتعديل: ${item.title}` : `تحديث على: ${item.title}`;
-    recipients.forEach((id) => notify(id, message, item.id));'''
-          if old not in app:
-            raise SystemExit('App notification block not found')
-          app = app.replace(old, new, 1)
-          app_path.write_text(app)
-
-          wd_path = Path('src/v8/WorkDetail.tsx')
-          wd = wd_path.read_text()
-
-          old = '''  const isBranch = currentRole?.key === "branch_head";
-  const isDept = currentRole?.key === "department_head";
-  const isOffice = currentRole?.key === "office_responsible";'''
-          new = '''  const isBranch = currentRole?.key === "branch_head" || currentRole?.name?.trim() === "رئيس الفرع";
-  const isDept = currentRole?.key === "department_head" || currentRole?.name?.includes("رئيس قسم") === true;
-  const isOffice = currentRole?.key === "office_responsible" || currentRole?.name?.includes("مسؤول مكتب") === true;'''
-          if old not in wd:
-            raise SystemExit('WorkDetail role block not found')
-          wd = wd.replace(old, new, 1)
-
-          old = '''  const assignee = org.users.find((u) => u.id === item.assigneeId);
-  const owner = org.users.find((u) => u.id === item.ownerId);
-  const dept = org.departments.find((d) => d.id === item.departmentId);'''
-          new = '''  const assignee = org.users.find((u) => u.id === item.assigneeId);
-  const owner = org.users.find((u) => u.id === item.ownerId);
-  const dept = org.departments.find((d) => d.id === item.departmentId);
-  const branch = org.users.find((u) => roleOf(org, u)?.key === "branch_head" || roleOf(org, u)?.name?.trim() === "رئيس الفرع");
-  const deptHead = dept?.headUserId ? org.users.find((u) => u.id === dept.headUserId) : undefined;
-  const assigneeRole = assignee ? roleOf(org, assignee) : undefined;
-  const assigneeIsBranch = assigneeRole?.key === "branch_head" || assigneeRole?.name?.trim() === "رئيس الفرع";
-  const configuredManager = assignee?.managerId ? org.users.find((u) => u.id === assignee.managerId && u.active) : undefined;
-  const approvalTarget = assigneeIsBranch ? undefined : configuredManager ?? deptHead ?? branch;
-  const approvalTargetId = approvalTarget?.id;'''
-          if old not in wd:
-            raise SystemExit('WorkDetail assignee block not found')
-          wd = wd.replace(old, new, 1)
-
-          old = '''  const officeCanComplete = !isProject && isOffice && assignedToMe && canWork && ["active", "waiting"].includes(item.status);
-  const canApprove = !readOnlyProject && (isBranch || (!isProject && isDept && item.departmentId === currentUser.departmentId));
-  const canLifecycle = isBranch || (!isProject && isDept && item.departmentId === currentUser.departmentId);
-  const canReopen = canLifecycle && !item.archivedAt && item.status === "done";
-
-  const branch = org.users.find((u) => roleOf(org, u)?.key === "branch_head");
-  const deptHead = dept?.headUserId ? org.users.find((u) => u.id === dept.headUserId) : undefined;'''
-          new = '''  const canSubmitCompletion = assignedToMe && canWork && ["active", "waiting"].includes(item.status) && !!approvalTargetId && approvalTargetId !== currentUser.id;
-  const canCloseOwn = assignedToMe && canWork && ["active", "waiting"].includes(item.status) && !approvalTargetId;
-  const canApprove = !readOnlyProject && item.status === "review" && (approvalTargetId === currentUser.id || (!approvalTargetId && isBranch));
-  const canLifecycle = isBranch || (!isProject && isDept && item.departmentId === currentUser.departmentId);
-  const canReopen = canLifecycle && !item.archivedAt && item.status === "done";'''
-          if old not in wd:
-            raise SystemExit('WorkDetail approval block not found')
-          wd = wd.replace(old, new, 1)
-
-          old = '''          {isOffice && !isProject && <Notice tone="emerald">عند إنهاء المهمة اضغط «تم الإنجاز». سيصل إشعار إلى رئيس القسم، ولا يظهر لمسؤول المكتب زر «إرسال للاعتماد».</Notice>}'''
-          new = '''          {isOffice && !isProject && <Notice tone="emerald">عند إنهاء المهمة اضغط «تم الإنجاز». ستنتقل المهمة إلى «بانتظار الموافقة» عند المسؤول الأعلى، ولن تصبح منجزة إلا بعد اعتماده لها.</Notice>}
-          {item.status === "review" && approvalTarget && <Notice tone="indigo">تم إنجاز العمل من المنفذ وهو الآن بانتظار موافقة {approvalTarget.name}. لا يعتبر العمل منجزاً نهائياً قبل الاعتماد.</Notice>}'''
-          if old not in wd:
-            raise SystemExit('WorkDetail office notice not found')
-          wd = wd.replace(old, new, 1)
-
-          old = '''          {canWork && !isOffice && ["active", "waiting"].includes(item.status) && <Primary onClick={() => onTransition(item, "review", `تم إرسال ${noun} للاعتماد.`)}>إرسال للاعتماد</Primary>}
-          {officeCanComplete && <Primary onClick={() => onTransition(item, "done", "تم إنجاز المهمة من قبل مسؤول المكتب وإبلاغ رئيس القسم.")}><CheckCircle2 size={14} />تم الإنجاز</Primary>}
-          {canApprove && !item.archivedAt && !["done", "new", "returned"].includes(item.status) && <Primary onClick={() => onTransition(item, "done", `تم اعتماد ${noun} وإنهاؤه.`)}><CheckCircle2 size={14} />اعتماد وإنهاء</Primary>}
-          {canApprove && !item.archivedAt && item.status === "review" && <button onClick={() => onTransition(item, "returned", `أعيد ${noun} للتعديل وبانتظار تأكيد الاستلام من المسؤول.`)} className="h-10 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 text-[11px] font-bold text-rose-300">إعادة للتعديل</button>}'''
-          new = '''          {canSubmitCompletion && <Primary onClick={() => onTransition(item, "review", `تم إنجاز ${noun} وإرساله إلى ${approvalTarget?.name ?? "المسؤول الأعلى"} للموافقة.`)}><CheckCircle2 size={14} />تم الإنجاز</Primary>}
-          {canCloseOwn && <Primary onClick={() => onTransition(item, "done", `تم إنهاء ${noun} واعتماده.`)}><CheckCircle2 size={14} />إنهاء واعتماد</Primary>}
-          {canApprove && !item.archivedAt && <Primary onClick={() => onTransition(item, "done", `تمت الموافقة على إنجاز ${noun} وإغلاقه كمنجز.`)}><CheckCircle2 size={14} />موافقة وإغلاق كمنجز</Primary>}
-          {canApprove && !item.archivedAt && <button onClick={() => onTransition(item, "returned", `أعيد ${noun} للتعديل وبانتظار تأكيد الاستلام من المسؤول.`)} className="h-10 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 text-[11px] font-bold text-rose-300">إعادة للتعديل</button>}'''
-          if old not in wd:
-            raise SystemExit('WorkDetail action block not found')
-          wd = wd.replace(old, new, 1)
-
-          wd_path.write_text(wd)
-          PY
-
-          git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/v8/App.tsx src/v8/WorkDetail.tsx
