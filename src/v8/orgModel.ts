@@ -19,12 +19,14 @@ export type OrgRole = {
   key: OrgRoleKey;
   permissions: PermissionKey[];
   system?: boolean;
+  updatedAt?: string;
 };
 
 export type OrgDepartment = {
   id: string;
   name: string;
   headUserId?: string;
+  updatedAt?: string;
 };
 
 export type OrgOffice = {
@@ -32,6 +34,7 @@ export type OrgOffice = {
   name: string;
   departmentId: string;
   responsibleUserId?: string;
+  updatedAt?: string;
 };
 
 export type OrgUser = {
@@ -46,6 +49,7 @@ export type OrgUser = {
   officeId?: string;
   managerId?: string;
   active: boolean;
+  updatedAt?: string;
 };
 
 export type OrgState = {
@@ -82,7 +86,7 @@ export const SYSTEM_ADMIN_USER: OrgUser = {
 };
 
 // These are the real operational role types required by the application.
-// No users, departments, or offices are automatically created anymore.
+// No users, departments, offices, projects, or tasks are automatically created.
 export const defaultRoles: OrgRole[] = [
   { id: "role-branch-head", key: "branch_head", name: "رئيس الفرع", system: true, permissions: ["manage_structure", "manage_users", "manage_roles", "view_all_tree", "create_projects", "create_tasks", "assign_department_tasks", "assign_team_tasks", "approve_work", "view_reports"] },
   { id: "role-department-head", key: "department_head", name: "رئيس قسم", system: true, permissions: ["view_team_tree", "create_tasks", "assign_team_tasks", "view_reports"] },
