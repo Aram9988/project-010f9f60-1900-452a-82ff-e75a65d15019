@@ -29,7 +29,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
       <div className="tech-panel max-w-md p-8 text-center">
         <BranchEmblem className="mx-auto mb-5 h-16 w-20 text-[#b8a57b]" />
         <h1 className="text-xl font-black">تعذر تحميل الصفحة</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-500">حدث خطأ غير متوقع. يمكنك إعادة المحاولة دون فقدان البيانات التجريبية المحفوظة على هذا الجهاز.</p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">حدث خطأ غير متوقع. يمكنك إعادة المحاولة دون فقدان البيانات المحفوظة على هذا الجهاز.</p>
         <div className="mt-6 flex justify-center gap-2">
           <button onClick={() => { router.invalidate(); reset(); }} className="h-11 rounded-xl bg-cyan-300 px-5 text-sm font-black text-slate-950">إعادة المحاولة</button>
           <a href="./" className="inline-flex h-11 items-center rounded-xl border border-white/10 px-5 text-sm font-bold text-slate-300">الرئيسية</a>
@@ -66,8 +66,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+function SiteFooter() {
+  return (
+    <footer className="relative z-20 border-t border-white/8 bg-[#06101d]/95 px-4 py-5 text-center text-[10px] leading-5 text-slate-500 print:hidden">
+      <div className="font-semibold tracking-wide text-slate-400" dir="ltr">Designed by Eng. Wissam Alkelani</div>
+      <div className="mt-1">© 2026 فرع اتصالات ريف دمشق — وزارة الداخلية. جميع الحقوق محفوظة.</div>
+    </footer>
+  );
+}
+
 function RootShell({ children }: { children: ReactNode }) {
-  return <html lang="ar" dir="rtl"><head><HeadContent /></head><body>{children}<Scripts /></body></html>;
+  return <html lang="ar" dir="rtl"><head><HeadContent /></head><body>{children}<SiteFooter /><Scripts /></body></html>;
 }
 
 function RootComponent() {
