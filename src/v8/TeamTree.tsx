@@ -6,6 +6,7 @@ import { useLiveAppState } from "./liveState";
 
 type Point = { x: number; y: number };
 type Tone = "active" | "pending" | "done";
+const COMPLETED_TREE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function itemTone(status: TaskStatus): Tone {
   if (status === "active") return "active";
@@ -22,6 +23,20 @@ function hasActiveWork(userId: string, state: OrgState, items: Assignment[], vis
   return state.users
     .filter((user) => user.managerId === userId && user.active && visibleIds.has(user.id))
     .some((child) => hasActiveWork(child.id, state, items, visibleIds));
+}
+
+function completionTime(item: Assignment) {
+  const completedUpdate = [...item.updates]
+    .filter((update) => update.status === "done")
+    .sort((a, b) => b.at.localeCompare(a.at))[0];
+  const value = completedUpdate?.at ?? item.updatedAt;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Date.now();
+}
+
+function visibleOnTree(item: Assignment, now: number) {
+  if (item.status !== "done") return true;
+  return now - completionTime(item) <= COMPLETED_TREE_RETENTION_MS;
 }
 
 function officeDepartmentId(state: OrgState, user: OrgUser) {
@@ -65,6 +80,7 @@ function callTargetFor(state: OrgState, user: OrgUser) {
 export default function TeamTree({ state, items, currentUserId, onOpenItem }: { state: OrgState; items: Assignment[]; currentUserId: string; onOpenItem: (id: string) => void }) {
   const current = currentUserId === SYSTEM_ADMIN_ID ? SYSTEM_ADMIN_USER : state.users.find((u) => u.id === currentUserId);
   const [liveApp, setLiveApp] = useLiveAppState();
+  const [treeNow, setTreeNow] = useState(() => Date.now());
   const panelRef = useRef<HTMLElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -73,6 +89,11 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTreeNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const handleFullscreen = () => {
@@ -108,7 +129,8 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
   const root = currentRole?.key === "branch_head" ? branchHead ?? currentUser : currentUser;
   const visibleUsers = [root, ...descendants(state, root.id)].filter((u) => u.active);
   const visibleIds = new Set(visibleUsers.map((u) => u.id));
-  const workingCount = visibleUsers.filter((u) => directActive(u.id, items)).length;
+  const treeItems = items.filter((item) => visibleOnTree(item, treeNow));
+  const workingCount = visibleUsers.filter((u) => directActive(u.id, treeItems)).length;
   const activeCalls = (liveApp.callRequests ?? []).filter((r) => r.active);
   const allowedCallTarget = callTargetFor(state, currentUser);
   const myActiveCall = allowedCallTarget
@@ -183,7 +205,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
       <div>
         <div className="flex items-center gap-2 text-[10px] tracking-[.2em] text-cyan-300/50"><Network size={14} /> LIVE ORGANIZATION TOPOLOGY</div>
         <h1 className="mt-2 text-2xl font-black">المراقبة الحية للفريق</h1>
-        <p className="mt-1 text-xs leading-6 text-slate-500">الموجة تبدأ من رئيس القسم وتتبع المسار الحقيقي حتى بطاقة الشخص صاحب العمل النشط. الأعمال غير المستلمة والمنتهية لا تولد موجة.</p>
+        <p className="mt-1 text-xs leading-6 text-slate-500">الأعمال المنجزة تبقى ظاهرة في الشجرة لمدة أسبوع من تاريخ الإنجاز ثم تختفي من الشجرة فقط، مع بقائها محفوظة في السجلات والتقارير.</p>
       </div>
       <div className="flex flex-wrap gap-2">
         {allowedCallTarget && <button type="button" onClick={requestCall} disabled={Boolean(myActiveCall)} className="flex items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2 text-[10px] font-black text-amber-200 disabled:opacity-45"><PhoneCall size={14} />{myActiveCall ? "تم إرسال طلب الاتصال" : currentRole?.key === "office_responsible" ? "طلب اتصال من رئيس القسم" : "طلب اتصال من رئيس الفرع"}</button>}
@@ -203,7 +225,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
       </div>
       <div ref={viewportRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} onWheel={onTopologyWheel} className={`topology-scroll relative p-5 md:p-8 ${isFullscreen ? `h-[calc(100vh-58px)] overflow-hidden select-none touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}` : "overflow-auto"}`}>
         <div ref={contentRef} className="mx-auto w-max min-w-max px-8 pb-10 pt-2 will-change-transform" style={isFullscreen ? { transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`, transformOrigin: "top center" } : undefined}>
-          {currentRole?.key === "branch_head" ? <div className="flex flex-col items-center"><BranchRoot name={state.branchName} active={workingCount > 0} /><CurvedStem /><OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} /></div> : <div className="flex justify-center"><OrgNode user={root} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} /></div>}
+          {currentRole?.key === "branch_head" ? <div className="flex flex-col items-center"><BranchRoot name={state.branchName} active={workingCount > 0} /><CurvedStem /><OrgNode user={root} state={state} items={treeItems} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} /></div> : <div className="flex justify-center"><OrgNode user={root} state={state} items={treeItems} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} /></div>}
         </div>
       </div>
     </section>
@@ -290,7 +312,7 @@ function PersonNode({ user, roleName, subtitle, activeItems, pendingItems, compl
     </> : <>
       <WorkSection title="الأعمال النشطة" count={activeItems.length} tone="active" items={activeItems} onOpenItem={onOpenItem} />
       {pendingItems.length > 0 && <WorkSection title="بانتظار / غير نشط" count={pendingItems.length} tone="pending" items={pendingItems} onOpenItem={onOpenItem} />}
-      {completedItems.length > 0 && <WorkSection title="الأعمال المنتهية" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} />}
+      {completedItems.length > 0 && <WorkSection title="الأعمال المنجزة — آخر 7 أيام" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} />}
     </>}
   </div>;
 }
