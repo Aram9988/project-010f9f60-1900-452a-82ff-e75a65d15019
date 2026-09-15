@@ -1,41 +1,16 @@
-# Arabic Task Management — Public Prototype Plan
+# Reports-only refinement
 
-This repository contains a generic public frontend prototype for an Arabic-first RTL task-management application.
+## Scope
+- Modify only `src/v8/Reports.tsx`.
+- Preserve report authorization, item scope, date filtering, and all non-report behavior.
 
-## Public-demo rules
+## Changes
+- Exclude system-generated updates from project activity rows while retaining current date and project/task scope.
+- Reduce the project activity table to numbering and update details, prefixing related-task updates with the task title.
+- Remove all attachment output and attachment references from the project PDF.
+- Set both generated report documents to zero page margins and recreate their visual margins with internal padding; neutralize the print document title.
+- Align the project, date, and print controls through one consistent labeled four-column responsive grid.
 
-- All users, departments, comments, tasks and attachments must be obviously fictitious demo data.
-- Do not commit real organization names, personnel names, ranks, internal locations, network topology, IP addressing, VPN configuration, credentials, access tokens or operational documents.
-- Do not add a real backend, production credentials or private infrastructure details to the public repository.
-- The public preview is not an authentication or security boundary.
-
-## Product direction
-
-Keep the daily workflow small and understandable:
-
-`Create task → acknowledge → update/status → submit for approval → approve/end or return`
-
-Primary daily areas:
-- Dashboard
-- Tasks
-- New task
-- Reports
-
-Administration, audit and settings should remain available only to authorized demo roles and should not clutter normal navigation.
-
-## Frontend foundations
-
-- React + TypeScript
-- TanStack Router / Start
-- Tailwind CSS / shadcn/ui
-- Arabic RTL and responsive layout
-- Zustand-backed local demo state
-- Typed service layer so a private backend can replace demo storage later
-
-## Security boundary
-
-Client-side roles and permissions exist only to demonstrate intended product behavior. A production deployment requires server-side authorization, real authentication, protected file storage, a database, audit controls and deployment-specific security configuration.
-
-## Demo data
-
-Seed data must use generic labels such as “المدير التجريبي” and generic task examples. It must never resemble a real personnel directory or disclose operational infrastructure.
+## Verification
+- Run the TypeScript check and production build validation provided by the project harness.
+- Open the reports screen in the preview and verify the control alignment and generated report markup.
