@@ -78,13 +78,13 @@ function completedReportHtml(rows: Assignment[], org: OrgState, departmentId: st
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(headline)}</title>
+<title>&nbsp;</title>
 <style>
-@page { size: A4; margin: 22mm 18mm; }
+@page { size: A4; margin: 0; }
 * { box-sizing: border-box; }
 html, body { background: #fff; }
 body { margin: 0; direction: rtl; font-family: Arial, Tahoma, sans-serif; color: #111; }
-.report { width: 100%; max-width: 900px; margin: 0 auto; padding-top: 8px; }
+.report { width: 100%; max-width: 900px; margin: 0 auto; padding: 22mm 18mm; }
 .date { text-align: right; margin-bottom: 24px; font-size: 11pt; }
 h1 { margin: 0; text-align: center; font-size: 20pt; font-weight: 700; }
 h2 { margin: 14px 0 10px; text-align: center; font-size: 16pt; font-weight: 400; }
@@ -135,11 +135,16 @@ function printHtml(html: string, errorMessage = "تعذر تجهيز ملف PDF 
   printDocument.open();
   printDocument.write(html);
   printDocument.close();
+  const originalTitle = printDocument.title;
+  printDocument.title = " ";
 
   window.setTimeout(() => {
     try {
       printWindow.focus();
-      printWindow.addEventListener("afterprint", cleanup, { once: true });
+      printWindow.addEventListener("afterprint", () => {
+        printDocument.title = originalTitle;
+        cleanup();
+      }, { once: true });
       printWindow.print();
       window.setTimeout(cleanup, 30_000);
     } catch {
@@ -159,13 +164,10 @@ function projectActivityReportHtml(project: Assignment, relatedTasks: Assignment
   const rangeLabel = fromDate === toDate ? fmtReportDate(fromDate) : `من ${fmtReportDate(fromDate)} إلى ${fmtReportDate(toDate)}`;
   const activeTasks = relatedTasks.filter((task) => !task.archivedAt && task.status === "active").length;
   const participants = new Set(activityRows.map(({ update }) => update.authorId).filter(Boolean));
-  const attachments = activityRows.filter(({ update }) => !!update.attachment);
   const activityBody = activityRows.map(({ item, update }, index) => {
-    const author = org.users.find((u) => u.id === update.authorId)?.name ?? "النظام";
-    const source = item.kind === "project" ? "المشروع" : item.title;
-    const status = update.status ? statusMeta[update.status].label : statusMeta[item.status].label;
-    const attachment = update.attachment ? `<div class="attachment">مرفق: ${escapeHtml(update.attachment)}</div>` : "";
-    return `<tr><td>${index + 1}</td><td>${escapeHtml(source)}</td><td>${escapeHtml(update.text || "تحديث على العمل")}${attachment}</td><td>${escapeHtml(author)}</td><td>${escapeHtml(status)}</td><td>${escapeHtml(fmtDateTime(update.at))}</td></tr>`;
+    const updateText = update.text?.trim() || "تحديث على العمل";
+    const detail = item.kind === "task" ? `${item.title} — ${updateText}` : updateText;
+    return `<tr><td>${index + 1}</td><td>${escapeHtml(detail)}</td></tr>`;
   }).join("");
   const completedBody = completedTasks.map((task, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(task.title)}</td><td>${escapeHtml(org.users.find((u) => u.id === (task.assigneeId ?? task.ownerId))?.name ?? "—")}</td><td>${escapeHtml(fmtDateTime(completionTime(task)))}</td></tr>`).join("");
   const summary = activityRows.length
@@ -177,12 +179,12 @@ function projectActivityReportHtml(project: Assignment, relatedTasks: Assignment
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>تقرير متابعة المشروع - ${escapeHtml(project.title)}</title>
+<title>&nbsp;</title>
 <style>
-@page { size: A4; margin: 11mm 12mm 13mm; }
+@page { size: A4; margin: 0; }
 * { box-sizing: border-box; }
 html, body { background:#f5f2ec; }
-body { margin:0; direction:rtl; font-family:Arial,Tahoma,sans-serif; color:#233238; }
+body { margin:0; padding:11mm 12mm 13mm; direction:rtl; font-family:Arial,Tahoma,sans-serif; color:#233238; }
 .page { max-width:920px; margin:0 auto; background:#f8f5ef; min-height:100vh; }
 .hero { position:relative; background:#213a3f; color:white; padding:22px 28px 20px; border-bottom:5px solid #d8a51d; }
 .hero:before { content:""; position:absolute; top:0; right:0; width:170px; height:4px; background:#1b8a86; }
@@ -205,12 +207,7 @@ th { background:#213a3f; color:white; font-size:10px; padding:8px 7px; border:1p
 td { font-size:9.5px; line-height:1.55; padding:8px 7px; border:1px solid #d5d8d3; vertical-align:top; }
 tbody tr:nth-child(even) td { background:#f1f2ed; }
 .activity th:nth-child(1), .activity td:nth-child(1) { width:5%; text-align:center; }
-.activity th:nth-child(2), .activity td:nth-child(2) { width:18%; }
-.activity th:nth-child(3), .activity td:nth-child(3) { width:37%; }
-.activity th:nth-child(4), .activity td:nth-child(4) { width:14%; }
-.activity th:nth-child(5), .activity td:nth-child(5) { width:12%; }
-.activity th:nth-child(6), .activity td:nth-child(6) { width:14%; }
-.attachment { margin-top:5px; color:#137a77; font-size:8.5px; }
+.activity th:nth-child(2), .activity td:nth-child(2) { width:95%; }
 .summary { border:1px solid #cfd8d5; border-radius:10px; background:#edf4f2; padding:14px 16px; line-height:1.8; font-size:11px; border-right:5px solid #1b8a86; }
 .empty { padding:20px; text-align:center; color:#8a9290; }
 .footer { margin-top:20px; padding-top:9px; border-top:1px solid #c8ceca; display:flex; justify-content:space-between; color:#8b918e; font-size:8.5px; }
@@ -239,8 +236,8 @@ tbody tr:nth-child(even) td { background:#f1f2ed; }
 
     <div class="section-title">الأعمال والتحديثات خلال الفترة</div>
     <table class="activity">
-      <thead><tr><th>م</th><th>المصدر</th><th>تفاصيل التحديث</th><th>المستخدم</th><th>الحالة</th><th>التاريخ والوقت</th></tr></thead>
-      <tbody>${activityBody || '<tr><td colspan="6" class="empty">لا توجد تحديثات مسجلة ضمن الفترة المحددة.</td></tr>'}</tbody>
+      <thead><tr><th>م</th><th>تفاصيل التحديث</th></tr></thead>
+      <tbody>${activityBody || '<tr><td colspan="2" class="empty">لا توجد تحديثات مسجلة ضمن الفترة المحددة.</td></tr>'}</tbody>
     </table>
 
     <div class="section-title">المهام المنجزة ضمن المشروع</div>
@@ -250,7 +247,7 @@ tbody tr:nth-child(even) td { background:#f1f2ed; }
     </table>
 
     <div class="section-title">الملخص التنفيذي</div>
-    <div class="summary">${escapeHtml(summary)}${attachments.length ? ` تم إرفاق ملفات مع ${attachments.length} من التحديثات.` : ""}</div>
+    <div class="summary">${escapeHtml(summary)}</div>
 
     <div class="footer"><span>فرع اتصالات ريف دمشق — وزارة الداخلية</span><span>${escapeHtml(project.number || project.id)}</span></div>
   </div>
@@ -311,7 +308,7 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
   const projectActivityRows = useMemo<ProjectActivityRow[]>(() => {
     if (!selectedProject) return [];
     const sources = [selectedProject, ...relatedProjectTasks];
-    return sources.flatMap((item) => item.updates.filter((update) => inDateRange(update.at, projectFromDate, projectToDate)).map((update) => ({ item, update }))).sort((a, b) => a.update.at.localeCompare(b.update.at));
+    return sources.flatMap((item) => item.updates.filter((update) => update.system !== true && inDateRange(update.at, projectFromDate, projectToDate)).map((update) => ({ item, update }))).sort((a, b) => a.update.at.localeCompare(b.update.at));
   }, [selectedProject, relatedProjectTasks, projectFromDate, projectToDate]);
   const completedProjectTasks = useMemo(() => relatedProjectTasks.filter((task) => task.status === "done" && inDateRange(completionTime(task), projectFromDate, projectToDate)).sort((a, b) => completionTime(a).localeCompare(completionTime(b))), [relatedProjectTasks, projectFromDate, projectToDate]);
   const projectDateRangeValid = projectFromDate <= projectToDate;
@@ -349,11 +346,11 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
           <h2 className="mt-2 text-lg font-black">تقرير متابعة مشروع</h2>
           <p className="mt-1 max-w-2xl text-[10px] leading-5 text-slate-500">يعرض المشروع والمهام المرتبطة والتحديثات التي أضيفت خلال التاريخ المحدد فقط، وفق صلاحيات المستخدم الحالية.</p>
         </div>
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" dir="rtl">
-          <select className="tech-field w-full min-w-0" value={projectReportId} onChange={(e) => setProjectReportId(e.target.value)}><option value="">اختر المشروع</option>{projectReportProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select>
-          <label className="min-w-0"><span className="mb-1 block text-[9px] font-bold text-slate-500">من تاريخ</span><input type="date" className="tech-field w-full min-w-0" value={projectFromDate} max={projectToDate} onChange={(e) => setProjectFromDate(e.target.value)} /></label>
-          <label className="min-w-0"><span className="mb-1 block text-[9px] font-bold text-slate-500">إلى تاريخ</span><input type="date" className="tech-field w-full min-w-0" value={projectToDate} min={projectFromDate} onChange={(e) => setProjectToDate(e.target.value)} /></label>
-          <button type="button" disabled={!selectedProject || !projectDateRangeValid} onClick={() => selectedProject && printHtml(projectActivityReportHtml(selectedProject, relatedProjectTasks, projectActivityRows, completedProjectTasks, org, projectFromDate, projectToDate))} className="report-action w-full min-w-0 justify-center whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"><Printer size={14} />طباعة / حفظ PDF</button>
+        <div className="grid min-w-0 grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4" dir="rtl">
+          <label className="grid min-w-0 grid-rows-[auto_44px] gap-1"><span className="block text-[9px] font-bold text-slate-500">المشروع</span><select className="tech-field h-11 w-full min-w-0" value={projectReportId} onChange={(e) => setProjectReportId(e.target.value)}><option value="">اختر المشروع</option>{projectReportProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
+          <label className="grid min-w-0 grid-rows-[auto_44px] gap-1"><span className="block text-[9px] font-bold text-slate-500">من تاريخ</span><input type="date" className="tech-field h-11 w-full min-w-0" value={projectFromDate} max={projectToDate} onChange={(e) => setProjectFromDate(e.target.value)} /></label>
+          <label className="grid min-w-0 grid-rows-[auto_44px] gap-1"><span className="block text-[9px] font-bold text-slate-500">إلى تاريخ</span><input type="date" className="tech-field h-11 w-full min-w-0" value={projectToDate} min={projectFromDate} onChange={(e) => setProjectToDate(e.target.value)} /></label>
+          <div className="grid min-w-0 grid-rows-[auto_44px] gap-1"><span className="block text-[9px] font-bold text-slate-500">إجراء</span><button type="button" disabled={!selectedProject || !projectDateRangeValid} onClick={() => selectedProject && printHtml(projectActivityReportHtml(selectedProject, relatedProjectTasks, projectActivityRows, completedProjectTasks, org, projectFromDate, projectToDate))} className="report-action h-11 w-full min-w-0 justify-center whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"><Printer size={14} />طباعة / حفظ PDF</button></div>
         </div>
       </div>
       {!projectDateRangeValid && <div className="border-b border-rose-300/10 bg-rose-300/[0.035] px-5 py-2 text-[10px] font-bold text-rose-300">تاريخ البداية يجب أن يكون قبل أو مساوياً لتاريخ النهاية.</div>}
