@@ -27,22 +27,37 @@ type PrivateState = { reminders: Reminder[]; notes: Note[] };
 type Tab = "reminders" | "notes";
 type ReminderFilter = "all" | "overdue" | "today" | "tomorrow" | "week" | "later" | "nodate";
 
-const STORAGE_KEY = "command-center-private-workspace-v1";
+const LEGACY_STORAGE_KEY = "command-center-private-workspace-v1";
+const USER_STORAGE_PREFIX = "command-center-private-workspace-v2";
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const emptyState = (): PrivateState => ({ reminders: [], notes: [] });
+const storageKey = (userId: string) => `${USER_STORAGE_PREFIX}:${encodeURIComponent(userId)}`;
 
-function loadState(): PrivateState {
-  if (typeof window === "undefined") return { reminders: [], notes: [] };
+function parseState(raw: string | null, userId: string): PrivateState {
+  if (!raw) return emptyState();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { reminders: [], notes: [] };
     const parsed = JSON.parse(raw) as Partial<PrivateState>;
     return {
-      reminders: Array.isArray(parsed.reminders) ? parsed.reminders : [],
-      notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+      reminders: Array.isArray(parsed.reminders) ? parsed.reminders.filter((r) => r?.createdBy === userId) : [],
+      notes: Array.isArray(parsed.notes) ? parsed.notes.filter((n) => n?.createdBy === userId) : [],
     };
   } catch {
-    return { reminders: [], notes: [] };
+    return emptyState();
   }
+}
+
+function loadState(userId: string): PrivateState {
+  if (typeof window === "undefined") return emptyState();
+
+  const key = storageKey(userId);
+  const scopedRaw = localStorage.getItem(key);
+  if (scopedRaw) return parseState(scopedRaw, userId);
+
+  // One-time safe migration from the old shared browser key. Only records
+  // created by the currently signed-in user are copied into that user's space.
+  const migrated = parseState(localStorage.getItem(LEGACY_STORAGE_KEY), userId);
+  localStorage.setItem(key, JSON.stringify(migrated));
+  return migrated;
 }
 
 function formatDue(value?: string) {
@@ -80,20 +95,39 @@ function matchesFilter(r: Reminder, filter: ReminderFilter, now = new Date()) {
 export default function PrivateWorkspace({ currentUser }: { currentUser: PrivateWorkspaceUser }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("reminders");
-  const [state, setState] = useState<PrivateState>(() => loadState());
+  const [storageOwnerId, setStorageOwnerId] = useState(currentUser.id);
+  const [state, setState] = useState<PrivateState>(() => loadState(currentUser.id));
   const [, tick] = useState(0);
 
-  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }, [state]);
+  useEffect(() => {
+    if (storageOwnerId === currentUser.id) return;
+    setOpen(false);
+    setTab("reminders");
+    setStorageOwnerId(currentUser.id);
+    setState(loadState(currentUser.id));
+  }, [currentUser.id, storageOwnerId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || storageOwnerId !== currentUser.id) return;
+    const cleanState: PrivateState = {
+      reminders: state.reminders.filter((r) => r.createdBy === currentUser.id),
+      notes: state.notes.filter((n) => n.createdBy === currentUser.id),
+    };
+    localStorage.setItem(storageKey(currentUser.id), JSON.stringify(cleanState));
+  }, [state, currentUser.id, storageOwnerId]);
+
   useEffect(() => { const timer = window.setInterval(() => tick((v) => v + 1), 60_000); return () => window.clearInterval(timer); }, []);
 
-  const activeReminders = useMemo(() => state.reminders.filter((r) => !r.completed).sort((a, b) => {
+  const activeReminders = useMemo(() => state.reminders.filter((r) => r.createdBy === currentUser.id && !r.completed).sort((a, b) => {
     if (!a.dueAt && !b.dueAt) return b.createdAt.localeCompare(a.createdAt);
     if (!a.dueAt) return 1;
     if (!b.dueAt) return -1;
     return a.dueAt.localeCompare(b.dueAt);
-  }), [state.reminders]);
+  }), [state.reminders, currentUser.id]);
 
-  const completedCount = state.reminders.filter((r) => r.completed).length;
+  const ownReminders = useMemo(() => state.reminders.filter((r) => r.createdBy === currentUser.id), [state.reminders, currentUser.id]);
+  const ownNotes = useMemo(() => state.notes.filter((n) => n.createdBy === currentUser.id), [state.notes, currentUser.id]);
+  const completedCount = ownReminders.filter((r) => r.completed).length;
   const overdueCount = activeReminders.filter((r) => isOverdue(r)).length;
 
   return <>
@@ -119,7 +153,7 @@ export default function PrivateWorkspace({ currentUser }: { currentUser: Private
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-white/8 bg-black/10 p-1 sm:mt-4"><button type="button" onClick={() => setTab("reminders")} className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg py-2.5 text-[11px] font-bold sm:gap-2 sm:text-xs ${tab === "reminders" ? "bg-cyan-300 text-slate-950" : "text-slate-500"}`}><BellRing size={14} /><span className="truncate">التذكيرات</span>{overdueCount > 0 && <span className="shrink-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[8px] text-white">{overdueCount}</span>}</button><button type="button" onClick={() => setTab("notes")} className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg py-2.5 text-[11px] font-bold sm:gap-2 sm:text-xs ${tab === "notes" ? "bg-cyan-300 text-slate-950" : "text-slate-500"}`}><NotebookPen size={14} /><span className="truncate">الملاحظات</span></button></div>
           </header>
-          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 pb-[max(20px,env(safe-area-inset-bottom))] sm:p-5">{tab === "reminders" ? <Reminders reminders={state.reminders} active={activeReminders} completedCount={completedCount} currentUser={currentUser} onAdd={(reminder) => setState((s) => ({ ...s, reminders: [reminder, ...s.reminders] }))} onComplete={(id) => setState((s) => ({ ...s, reminders: s.reminders.map((r) => r.id === id ? { ...r, completed: true, completedAt: new Date().toISOString() } : r) }))} onRestore={(id) => setState((s) => ({ ...s, reminders: s.reminders.map((r) => r.id === id ? { ...r, completed: false, completedAt: undefined } : r) }))} onDelete={(id) => setState((s) => ({ ...s, reminders: s.reminders.filter((r) => r.id !== id) }))} /> : <Notes notes={state.notes} currentUser={currentUser} onAdd={(note) => setState((s) => ({ ...s, notes: [note, ...s.notes] }))} onUpdate={(id, title, body) => setState((s) => ({ ...s, notes: s.notes.map((n) => n.id === id ? { ...n, title, body, updatedAt: new Date().toISOString() } : n) }))} onDelete={(id) => setState((s) => ({ ...s, notes: s.notes.filter((n) => n.id !== id) }))} />}</div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 pb-[max(20px,env(safe-area-inset-bottom))] sm:p-5">{tab === "reminders" ? <Reminders reminders={ownReminders} active={activeReminders} completedCount={completedCount} currentUser={currentUser} onAdd={(reminder) => setState((s) => ({ ...s, reminders: [reminder, ...s.reminders.filter((r) => r.createdBy === currentUser.id)] }))} onComplete={(id) => setState((s) => ({ ...s, reminders: s.reminders.map((r) => r.createdBy === currentUser.id && r.id === id ? { ...r, completed: true, completedAt: new Date().toISOString() } : r) }))} onRestore={(id) => setState((s) => ({ ...s, reminders: s.reminders.map((r) => r.createdBy === currentUser.id && r.id === id ? { ...r, completed: false, completedAt: undefined } : r) }))} onDelete={(id) => setState((s) => ({ ...s, reminders: s.reminders.filter((r) => r.createdBy !== currentUser.id || r.id !== id) }))} /> : <Notes notes={ownNotes} currentUser={currentUser} onAdd={(note) => setState((s) => ({ ...s, notes: [note, ...s.notes.filter((n) => n.createdBy === currentUser.id)] }))} onUpdate={(id, title, body) => setState((s) => ({ ...s, notes: s.notes.map((n) => n.createdBy === currentUser.id && n.id === id ? { ...n, title, body, updatedAt: new Date().toISOString() } : n) }))} onDelete={(id) => setState((s) => ({ ...s, notes: s.notes.filter((n) => n.createdBy !== currentUser.id || n.id !== id) }))} />}</div>
         </div>
       </section>
     </div>}
