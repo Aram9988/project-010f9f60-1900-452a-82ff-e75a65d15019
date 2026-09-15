@@ -55,6 +55,7 @@ function inDateRange(value: string, fromDate: string, toDate: string) {
 function reportRowText(item: Assignment) {
   const title = item.title.trim();
   const details = item.details?.trim();
+  if (item.kind === "project" && item.status === "active") return `دراسة ${title}`;
   if (item.status === "active") return `قيد التنفيذ: ${title}${details ? ` ${details}` : ""}`;
   return `${title}${details ? ` ${details}` : ""}`;
 }
@@ -95,7 +96,7 @@ th { background: #d9eaf7; text-align: center; font-size: 13pt; font-weight: 700;
   <div class="department">${escapeHtml(selectedDepartment)}</div>
   <table>
     <thead><tr><th>الأعمال المنجزة</th></tr></thead>
-    <tbody>${bodyRows || '<tr><td class="empty">لا توجد أعمال منجزة أو مهام قيد التنفيذ ضمن الفترة المحددة.</td></tr>'}</tbody>
+    <tbody>${bodyRows || '<tr><td class="empty">لا توجد أعمال منجزة أو مهام قيد التنفيذ أو دراسات نشطة ضمن التقرير.</td></tr>'}</tbody>
   </table>
 </div>
 </body>
@@ -164,8 +165,9 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
     const departmentMatch = (item: Assignment) => completedDepartmentId === "all" || item.departmentId === completedDepartmentId;
     const completed = reportSourceItems.filter((item) => item.status === "done" && departmentMatch(item) && inDateRange(completionTime(item), completedFromDate, completedToDate));
     const activeTasks = reportSourceItems.filter((item) => item.kind === "task" && item.status === "active" && !item.archivedAt && departmentMatch(item) && inDateRange(item.updatedAt, completedFromDate, completedToDate));
+    const activeProjects = reportSourceItems.filter((item) => item.kind === "project" && item.status === "active" && !item.archivedAt && departmentMatch(item));
     const byId = new Map<string, Assignment>();
-    [...completed, ...activeTasks].forEach((item) => byId.set(item.id, item));
+    [...completed, ...activeTasks, ...activeProjects].forEach((item) => byId.set(item.id, item));
     return [...byId.values()].sort((a, b) => {
       const aTime = a.status === "done" ? completionTime(a) : a.updatedAt;
       const bTime = b.status === "done" ? completionTime(b) : b.updatedAt;
@@ -211,7 +213,7 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
         <div className="min-w-0 text-right" dir="rtl">
           <div className="text-[10px] font-black tracking-[.16em] text-cyan-300/60">COMPLETED WORK REPORT</div>
           <h2 className="mt-2 text-lg font-black">تقرير الأعمال المنجزة</h2>
-          <p className="mt-1 max-w-2xl text-[10px] leading-5 text-slate-500">اختر نوع التقرير والفترة من / إلى. الأعمال المنجزة والمهام النشطة تُحتسب ضمن الفترة المحددة فقط.</p>
+          <p className="mt-1 max-w-2xl text-[10px] leading-5 text-slate-500">اختر نوع التقرير والفترة من / إلى. الأعمال المنجزة والمهام النشطة تُحتسب ضمن الفترة المحددة، وتظهر المشاريع النشطة كدراسات طوال فترة بقائها قيد التنفيذ.</p>
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" dir="rtl">
           <select className="tech-field w-full min-w-0" value={completedPeriod} onChange={(e) => changeCompletedPeriod(e.target.value as CompletedReportPeriod)}><option value="weekly">تقرير أسبوعي</option><option value="monthly">تقرير شهري</option></select>
@@ -228,7 +230,7 @@ export default function Reports({ items, reportItems, org, currentUser }: { item
           <div className="text-center"><div className="text-xl font-black">{reportHeadline}</div><div className="mt-3 text-base">الأعمال المنجزة</div><div className="mt-2 text-[11px] text-slate-600">{reportDepartment}</div></div>
           <div className="mt-10 overflow-x-auto">
             <table className="w-full min-w-[560px] table-fixed border-collapse text-right text-[12px]"><thead><tr><th className="border border-slate-500 bg-[#d9eaf7] p-3 text-center">الأعمال المنجزة</th></tr></thead><tbody>{completedReportRows.map((item) => <tr key={item.id}><td className="border border-slate-500 p-3 align-middle leading-6">{reportRowText(item)}</td></tr>)}</tbody></table>
-            {completedReportRows.length === 0 && <div className="border border-t-0 border-slate-500 p-8 text-center text-sm text-slate-500">لا توجد أعمال منجزة أو مهام قيد التنفيذ ضمن الفترة المحددة.</div>}
+            {completedReportRows.length === 0 && <div className="border border-t-0 border-slate-500 p-8 text-center text-sm text-slate-500">لا توجد أعمال منجزة أو مهام قيد التنفيذ أو دراسات نشطة ضمن التقرير.</div>}
           </div>
         </div>
         <div className="mt-3 text-center text-[9px] text-slate-600">الأعمال ضمن الفترة المحددة: {completedReportRows.length}</div>
