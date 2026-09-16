@@ -49,6 +49,8 @@ export type OrgUser = {
   officeId?: string;
   managerId?: string;
   active: boolean;
+  mustChangePassword?: boolean;
+  passwordChangedAt?: string;
   updatedAt?: string;
 };
 
@@ -83,6 +85,7 @@ export const SYSTEM_ADMIN_USER: OrgUser = {
   roleId: SYSTEM_ADMIN_ROLE.id,
   title: "System Administrator",
   active: true,
+  mustChangePassword: false,
 };
 
 // These are the real operational role types required by the application.
@@ -124,7 +127,9 @@ export function normalizeOrgState(value: Partial<OrgState> | OrgState): OrgState
   const roles = (Array.isArray(value.roles) ? value.roles : defaultRoles).filter((r) => !deletedRoles.has(r.id));
   const departments = (Array.isArray(value.departments) ? value.departments : []).filter((d) => !deletedDepartments.has(d.id));
   const offices = (Array.isArray(value.offices) ? value.offices : []).filter((o) => !deletedOffices.has(o.id) && !deletedDepartments.has(o.departmentId));
-  const users = (Array.isArray(value.users) ? value.users : []).filter((u) => !deletedUsers.has(u.id));
+  const users = (Array.isArray(value.users) ? value.users : [])
+    .filter((u) => !deletedUsers.has(u.id))
+    .map((u) => ({ ...u, mustChangePassword: u.mustChangePassword ?? true }));
 
   return {
     branchName: value.branchName || seedOrgState.branchName,
