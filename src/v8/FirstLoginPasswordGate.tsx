@@ -13,17 +13,17 @@ export default function FirstLoginPasswordGate() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
 
-  if (!user || user.mustChangePassword === false) return null;
-
   function submit(event: FormEvent) {
     event.preventDefault();
+    const activeUser = user;
+    if (!activeUser || activeUser.mustChangePassword === false) return;
     if (nextPassword.length < 8) { setError("كلمة المرور الجديدة يجب أن تكون 8 محارف على الأقل."); return; }
-    if (nextPassword === user.password) { setError("يرجى اختيار كلمة مرور مختلفة عن كلمة المرور المؤقتة."); return; }
+    if (nextPassword === activeUser.password) { setError("يرجى اختيار كلمة مرور مختلفة عن كلمة المرور المؤقتة."); return; }
     if (nextPassword !== confirmPassword) { setError("تأكيد كلمة المرور غير مطابق."); return; }
     const at = new Date().toISOString();
     setOrg((state) => ({
       ...state,
-      users: state.users.map((item) => item.id === user.id ? {
+      users: state.users.map((item) => item.id === activeUser.id ? {
         ...item,
         password: nextPassword,
         mustChangePassword: false,
@@ -35,6 +35,8 @@ export default function FirstLoginPasswordGate() {
     setNextPassword("");
     setConfirmPassword("");
   }
+
+  if (!user || user.mustChangePassword === false) return null;
 
   return <div className="fixed inset-0 z-[200] grid place-items-center bg-[#020611]/95 p-4 backdrop-blur-xl">
     <form onSubmit={submit} className="tech-panel w-full max-w-md p-6 sm:p-8">
