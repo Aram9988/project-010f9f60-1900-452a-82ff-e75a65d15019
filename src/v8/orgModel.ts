@@ -127,7 +127,7 @@ export function normalizeOrgState(value: Partial<OrgState> | OrgState): OrgState
   const offices = (Array.isArray(value.offices) ? value.offices : []).filter((o) => !deletedOffices.has(o.id) && !deletedDepartments.has(o.departmentId));
   const users = (Array.isArray(value.users) ? value.users : [])
     .filter((u) => !deletedUsers.has(u.id))
-    .map((u) => ({ ...u, mustChangePassword: u.mustChangePassword ?? false }));
+    .map((u) => ({ ...u, mustChangePassword: u.mustChangePassword ?? true }));
 
   return {
     branchName: value.branchName || seedOrgState.branchName,
