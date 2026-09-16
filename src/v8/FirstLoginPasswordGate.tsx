@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { SYSTEM_ADMIN_ID } from "./orgModel";
 import { useLiveOrgState } from "./liveState";
@@ -7,11 +7,19 @@ const SESSION_KEY = "command-center-demo-session";
 
 export default function FirstLoginPasswordGate() {
   const [org, setOrg] = useLiveOrgState();
-  const sessionUserId = typeof window !== "undefined" ? sessionStorage.getItem(SESSION_KEY) : null;
+  const [sessionUserId, setSessionUserId] = useState<string | null>(() => typeof window !== "undefined" ? sessionStorage.getItem(SESSION_KEY) : null);
   const user = useMemo(() => sessionUserId && sessionUserId !== SYSTEM_ADMIN_ID ? org.users.find((item) => item.id === sessionUserId && item.active) : undefined, [org.users, sessionUserId]);
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const syncSession = () => setSessionUserId(sessionStorage.getItem(SESSION_KEY));
+    syncSession();
+    const timer = window.setInterval(syncSession, 250);
+    window.addEventListener("focus", syncSession);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", syncSession); };
+  }, []);
 
   function submit(event: FormEvent) {
     event.preventDefault();
