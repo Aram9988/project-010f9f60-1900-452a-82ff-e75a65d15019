@@ -9,6 +9,10 @@ function svgEl<T extends keyof SVGElementTagNameMap>(name: T) {
   return document.createElementNS("http://www.w3.org/2000/svg", name);
 }
 
+function legacyConnectorSvgs() {
+  return document.querySelectorAll<SVGElement>(".topology-scroll div.h-24 > svg[aria-hidden='true']");
+}
+
 function hasActiveBelow(userId: string, users: OrgUser[], activeAssignees: Set<string>): boolean {
   if (activeAssignees.has(userId)) return true;
   return users.filter((user) => user.active && user.managerId === userId).some((child) => hasActiveBelow(child.id, users, activeAssignees));
@@ -25,13 +29,13 @@ export default function TopologyAutoConnectors() {
 
     const cleanupOverlay = () => {
       document.getElementById(OVERLAY_ID)?.remove();
-      document.querySelectorAll<SVGElement>(".topology-scroll div.h-24.w-full > svg[aria-hidden='true']").forEach((svg) => { svg.style.opacity = ""; });
+      legacyConnectorSvgs().forEach((svg) => { svg.style.opacity = ""; });
     };
 
     const render = () => {
       observer?.disconnect();
       resizeObserver?.disconnect();
-      cleanupOverlay();
+      document.getElementById(OVERLAY_ID)?.remove();
 
       const viewport = document.querySelector<HTMLElement>(".topology-scroll");
       const content = viewport?.firstElementChild as HTMLElement | null;
@@ -40,7 +44,10 @@ export default function TopologyAutoConnectors() {
         return;
       }
 
-      document.querySelectorAll<SVGElement>(".topology-scroll div.h-24.w-full > svg[aria-hidden='true']").forEach((svg) => { svg.style.opacity = "0"; });
+      // The built-in connector fan reserves vertical spacing, but the lines themselves are
+      // hidden. We draw one measured overlay instead, based on the actual card positions.
+      // This avoids RTL ordering mismatches and stays correct when subtrees grow or shrink.
+      legacyConnectorSvgs().forEach((svg) => { svg.style.opacity = "0"; });
       if (getComputedStyle(content).position === "static") content.style.position = "relative";
 
       const sessionId = sessionStorage.getItem(SESSION_KEY);
@@ -102,7 +109,7 @@ export default function TopologyAutoConnectors() {
         if (!Number.isFinite(startX + startY + endX + endY) || endY <= startY + 4) continue;
 
         const distanceY = endY - startY;
-        const controlY = startY + Math.max(42, Math.min(distanceY * 0.5, 110));
+        const controlY = startY + Math.max(36, Math.min(distanceY * 0.48, 105));
         const d = `M ${startX} ${startY} C ${startX} ${controlY}, ${endX} ${controlY}, ${endX} ${endY}`;
         const active = hasActiveBelow(child.id, visibleUsers, activeAssignees);
 
@@ -122,8 +129,10 @@ export default function TopologyAutoConnectors() {
             dot.setAttribute("fill", index === 0 ? "rgba(103,232,249,.98)" : "rgba(52,211,153,.9)");
             dot.setAttribute("filter", "drop-shadow(0 0 4px rgba(103,232,249,.85))");
             const motion = svgEl("animateMotion");
+            // The path is always built from parent -> child, so the pulse is guaranteed
+            // to travel from the manager downward to the active member.
             motion.setAttribute("path", d);
-            motion.setAttribute("dur", index === 0 ? "4.8s" : "4.8s");
+            motion.setAttribute("dur", "4.8s");
             motion.setAttribute("begin", index === 0 ? "0s" : "-2.4s");
             motion.setAttribute("repeatCount", "indefinite");
             motion.setAttribute("rotate", "auto");
