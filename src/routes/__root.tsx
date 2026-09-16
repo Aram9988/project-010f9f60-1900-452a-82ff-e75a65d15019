@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Outlet, Link, createRootRouteWithContext, useRouter, HeadContent, Scripts } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import BranchEmblem, { BRANCH_EMBLEM_DATA_URI } from "../v8/BranchEmblem";
 import FirstLoginPasswordGate from "../v8/FirstLoginPasswordGate";
 import ReliableMobileSync from "../v8/ReliableMobileSync";
+import TopologyAutoConnectors from "../v8/TopologyAutoConnectors";
+import WorkUnreadIndicators from "../v8/WorkUnreadIndicators";
 
 function NotFoundComponent() {
   return (
@@ -25,7 +26,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => { reportLovableError(error, { boundary: "tanstack_root_error_component" }); }, [error]);
   return (
     <div className="tech-shell flex min-h-screen items-center justify-center px-4 text-slate-100">
       <div className="tech-panel max-w-md p-8 text-center">
@@ -83,5 +83,5 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  return <QueryClientProvider client={queryClient}><Outlet /><ReliableMobileSync /><FirstLoginPasswordGate /><Toaster richColors position="top-center" dir="rtl" /></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><Outlet /><ReliableMobileSync /><TopologyAutoConnectors /><WorkUnreadIndicators /><FirstLoginPasswordGate /><Toaster richColors position="top-center" dir="rtl" /></QueryClientProvider>;
 }
