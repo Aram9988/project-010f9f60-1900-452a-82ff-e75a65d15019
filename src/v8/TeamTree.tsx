@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BriefcaseBusiness, CheckCircle2, ChevronDown, ChevronUp, CircleDot, Clock3, Focus, ListTodo, Maximize2, Minimize2, Minus, Network, PhoneCall, Plus, Radio, UserRound, UsersRound } from "lucide-react";
 import { statusMeta, type Assignment, type CallRequest, type TaskStatus } from "../v2/model";
 import { SYSTEM_ADMIN_ID, SYSTEM_ADMIN_USER, descendants, roleOf, type OrgState, type OrgUser } from "./orgModel";
@@ -7,6 +7,8 @@ import { useLiveAppState } from "./liveState";
 type Point = { x: number; y: number };
 type Tone = "active" | "pending" | "done";
 const COMPLETED_TREE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const NODE_WIDTH = 300;
+const CHILD_GAP = 40;
 
 function itemTone(status: TaskStatus): Tone {
   if (status === "active") return "active";
@@ -47,34 +49,38 @@ function officeDepartmentId(state: OrgState, user: OrgUser) {
 
 function callTargetFor(state: OrgState, user: OrgUser) {
   const role = roleOf(state, user);
-
   if (role?.key === "department_head") {
     return state.users.find((candidate) => candidate.active && roleOf(state, candidate)?.key === "branch_head")?.id;
   }
-
   const isOfficeResponsible =
     role?.key === "office_responsible" ||
     state.offices.some((office) => office.responsibleUserId === user.id) ||
     Boolean(user.officeId && role?.name?.includes("مسؤول مكتب"));
-
   if (!isOfficeResponsible) return undefined;
 
-  const directManager = user.managerId
-    ? state.users.find((candidate) => candidate.id === user.managerId && candidate.active)
-    : undefined;
+  const directManager = user.managerId ? state.users.find((candidate) => candidate.id === user.managerId && candidate.active) : undefined;
   if (directManager && roleOf(state, directManager)?.key === "department_head") return directManager.id;
 
   const departmentId = officeDepartmentId(state, user);
   const department = departmentId ? state.departments.find((item) => item.id === departmentId) : undefined;
-
-  const configuredHead = department?.headUserId
-    ? state.users.find((candidate) => candidate.id === department.headUserId && candidate.active)
-    : undefined;
+  const configuredHead = department?.headUserId ? state.users.find((candidate) => candidate.id === department.headUserId && candidate.active) : undefined;
   if (configuredHead && roleOf(state, configuredHead)?.key === "department_head") return configuredHead.id;
 
-  return state.users.find(
-    (candidate) => candidate.active && candidate.departmentId === departmentId && roleOf(state, candidate)?.key === "department_head",
-  )?.id;
+  return state.users.find((candidate) => candidate.active && candidate.departmentId === departmentId && roleOf(state, candidate)?.key === "department_head")?.id;
+}
+
+function childUsers(state: OrgState, userId: string, visibleIds: Set<string>) {
+  return state.users.filter((candidate) => candidate.managerId === userId && candidate.active && visibleIds.has(candidate.id));
+}
+
+function subtreeWidth(state: OrgState, userId: string, visibleIds: Set<string>, seen = new Set<string>()): number {
+  if (seen.has(userId)) return NODE_WIDTH;
+  const nextSeen = new Set(seen);
+  nextSeen.add(userId);
+  const children = childUsers(state, userId, visibleIds);
+  if (!children.length) return NODE_WIDTH;
+  const widths = children.map((child) => subtreeWidth(state, child.id, visibleIds, nextSeen));
+  return Math.max(NODE_WIDTH, widths.reduce((sum, width) => sum + width, 0) + CHILD_GAP * Math.max(0, widths.length - 1));
 }
 
 export default function TeamTree({ state, items, currentUserId, onOpenItem }: { state: OrgState; items: Assignment[]; currentUserId: string; onOpenItem: (id: string) => void }) {
@@ -133,9 +139,15 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
   const workingCount = visibleUsers.filter((u) => directActive(u.id, treeItems)).length;
   const activeCalls = (liveApp.callRequests ?? []).filter((r) => r.active);
   const allowedCallTarget = callTargetFor(state, currentUser);
-  const myActiveCall = allowedCallTarget
-    ? activeCalls.find((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget)
-    : undefined;
+  const myActiveCall = allowedCallTarget ? activeCalls.find((r) => r.fromUserId === currentUser.id && r.toUserId === allowedCallTarget) : undefined;
+  const unreadByItem = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const notice of liveApp.notices) {
+      if (notice.userId !== currentUser.id || notice.read || !notice.taskId) continue;
+      map.set(notice.taskId, (map.get(notice.taskId) ?? 0) + 1);
+    }
+    return map;
+  }, [liveApp.notices, currentUser.id]);
 
   function requestCall() {
     if (!allowedCallTarget || myActiveCall) return;
@@ -148,23 +160,13 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
       createdAt: at,
       active: true,
     };
-
     setLiveApp((latest) => {
       const calls = latest.callRequests ?? [];
       if (calls.some((call) => call.active && call.fromUserId === currentUser.id && call.toUserId === allowedCallTarget)) return latest;
       return {
         ...latest,
         callRequests: [request, ...calls],
-        notices: [
-          {
-            id: `notice-${request.id}`,
-            userId: allowedCallTarget,
-            text: `طلب اتصال من ${currentUser.name}${target ? ` إلى ${target.name}` : ""}.`,
-            at,
-            read: false,
-          },
-          ...latest.notices,
-        ],
+        notices: [{ id: `notice-${request.id}`, userId: allowedCallTarget, text: `طلب اتصال من ${currentUser.name}${target ? ` إلى ${target.name}` : ""}.`, at, read: false }, ...latest.notices],
       };
     });
   }
@@ -176,21 +178,17 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
       if (!call || !call.active || call.toUserId !== currentUser.id) return latest;
       return {
         ...latest,
-        callRequests: (latest.callRequests ?? []).map((request) =>
-          request.id === id ? { ...request, active: false, resolvedAt: at } : request,
-        ),
-        notices: [
-          {
-            id: `notice-resolved-${id}-${Date.now()}`,
-            userId: call.fromUserId,
-            text: `تم استلام طلب الاتصال من قبل ${currentUser.name}.`,
-            at,
-            read: false,
-          },
-          ...latest.notices,
-        ],
+        callRequests: (latest.callRequests ?? []).map((request) => request.id === id ? { ...request, active: false, resolvedAt: at } : request),
+        notices: [{ id: `notice-resolved-${id}-${Date.now()}`, userId: call.fromUserId, text: `تم استلام طلب الاتصال من قبل ${currentUser.name}.`, at, read: false }, ...latest.notices],
       };
     });
+  }
+
+  function openTreeItem(id: string) {
+    if (unreadByItem.get(id)) {
+      setLiveApp((latest) => ({ ...latest, notices: latest.notices.map((notice) => notice.userId === currentUser.id && notice.taskId === id ? { ...notice, read: true } : notice) }));
+    }
+    onOpenItem(id);
   }
 
   function setZoomSafe(next: number) { setZoom(Math.min(1.8, Math.max(0.22, Number(next.toFixed(2))))); }
@@ -217,7 +215,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
 
     <section ref={panelRef} className={`tech-panel overflow-hidden ${isFullscreen ? "topology-fullscreen" : ""}`}>
       <div className="flex items-center justify-between gap-3 border-b border-white/7 px-4 py-3 md:px-6">
-        <div className="text-[10px] text-slate-600">منحنيات تنظيمية واضحة تتصل بمركز كل بطاقة مباشرة، وتظهر حركة الإشارة فقط على المسار المؤدي إلى عمل نشط. في ملء الشاشة استخدم عجلة الماوس للتكبير والتصغير واسحب لتحريك المخطط.</div>
+        <div className="text-[10px] text-slate-600">المخطط يحسب عرض كل فرع تلقائياً حسب عدد أفراده، لذلك تبقى البطاقات والمنحنيات منفصلة حتى عند إضافة مستخدمين جدد.</div>
         <div className="flex shrink-0 items-center gap-2">
           {isFullscreen && <div className="flex items-center gap-1 rounded-xl border border-white/8 bg-black/15 p-1"><button type="button" onClick={() => setZoomSafe(zoom - 0.1)} className="topology-control"><Minus size={14} /></button><span className="min-w-12 text-center font-mono text-[9px] font-bold text-slate-400">{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoomSafe(zoom + 0.1)} className="topology-control"><Plus size={14} /></button><button type="button" onClick={fitTopology} className="topology-control"><Focus size={14} /></button></div>}
           <button type="button" onClick={toggleFullscreen} className="flex h-9 items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 text-[10px] font-bold text-slate-300 hover:border-cyan-300/20 hover:text-cyan-200">{isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{isFullscreen ? "خروج" : "ملء الشاشة"}</button>
@@ -225,7 +223,7 @@ export default function TeamTree({ state, items, currentUserId, onOpenItem }: { 
       </div>
       <div ref={viewportRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} onWheel={onTopologyWheel} className={`topology-scroll relative p-5 md:p-8 ${isFullscreen ? `h-[calc(100vh-58px)] overflow-hidden select-none touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}` : "overflow-auto"}`}>
         <div ref={contentRef} className="mx-auto w-max min-w-max px-8 pb-10 pt-2 will-change-transform" style={isFullscreen ? { transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`, transformOrigin: "top center" } : undefined}>
-          {currentRole?.key === "branch_head" ? <div className="flex flex-col items-center"><BranchRoot name={state.branchName} active={workingCount > 0} /><CurvedStem /><OrgNode user={root} state={state} items={treeItems} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} /></div> : <div className="flex justify-center"><OrgNode user={root} state={state} items={treeItems} visibleIds={visibleIds} onOpenItem={onOpenItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} /></div>}
+          {currentRole?.key === "branch_head" ? <div className="flex flex-col items-center"><BranchRoot name={state.branchName} active={workingCount > 0} /><CurvedStem /><OrgNode user={root} state={state} items={treeItems} visibleIds={visibleIds} onOpenItem={openTreeItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} unreadByItem={unreadByItem} /></div> : <div className="flex justify-center"><OrgNode user={root} state={state} items={treeItems} visibleIds={visibleIds} onOpenItem={openTreeItem} isRoot callRequests={activeCalls} currentUserId={currentUser.id} onResolveCall={resolveCall} branchHeadId={branchHead?.id} depth={0} unreadByItem={unreadByItem} /></div>}
         </div>
       </div>
     </section>
@@ -240,10 +238,11 @@ function CurvedStem() {
   return <svg aria-hidden="true" className="h-14 w-28 overflow-visible" viewBox="0 0 100 56"><path d="M50 0 C38 16 62 38 50 56" fill="none" stroke="rgba(103,232,249,.24)" strokeWidth="1.4" strokeLinecap="round" /></svg>;
 }
 
-function OrgNode({ user, state, items, visibleIds, onOpenItem, callRequests, currentUserId, onResolveCall, branchHeadId, isRoot = false, depth }: { user: OrgUser; state: OrgState; items: Assignment[]; visibleIds: Set<string>; onOpenItem: (id: string) => void; callRequests: CallRequest[]; currentUserId: string; onResolveCall: (id: string) => void; branchHeadId?: string; isRoot?: boolean; depth: number }) {
+function OrgNode({ user, state, items, visibleIds, onOpenItem, callRequests, currentUserId, onResolveCall, branchHeadId, unreadByItem, isRoot = false, depth }: { user: OrgUser; state: OrgState; items: Assignment[]; visibleIds: Set<string>; onOpenItem: (id: string) => void; callRequests: CallRequest[]; currentUserId: string; onResolveCall: (id: string) => void; branchHeadId?: string; unreadByItem: Map<string, number>; isRoot?: boolean; depth: number }) {
   const [expanded, setExpanded] = useState(true);
   const role = roleOf(state, user);
-  const children = state.users.filter((u) => u.managerId === user.id && u.active && visibleIds.has(u.id));
+  const children = childUsers(state, user.id, visibleIds);
+  const childWidths = children.map((child) => subtreeWidth(state, child.id, visibleIds));
   const assignedItems = items.filter((i) => (i.assigneeId ?? i.ownerId) === user.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const activeItems = assignedItems.filter((i) => i.status === "active");
   const pendingItems = assignedItems.filter((i) => i.status !== "active" && i.status !== "done");
@@ -259,41 +258,37 @@ function OrgNode({ user, state, items, visibleIds, onOpenItem, callRequests, cur
   const childActiveFlags = children.map((child) => parentIsBranchHead ? directActive(child.id, items) : hasActiveWork(child.id, state, items, visibleIds));
 
   return <div className="flex flex-col items-center">
-    <PersonNode user={user} roleName={role?.name ?? "بدون دور"} subtitle={office?.name ?? dept?.name ?? user.title ?? "إدارة الفرع"} activeItems={activeItems} pendingItems={pendingItems} completedItems={completedItems} commandItems={commandItems} otherOwnItems={otherOwnItems} delegatedTeamItems={delegatedTeamItems} onOpenItem={onOpenItem} isRoot={isRoot} childCount={children.length} expanded={expanded} onToggle={() => setExpanded((v) => !v)} incomingCalls={incomingCalls} state={state} currentUserId={currentUserId} onResolveCall={onResolveCall} />
+    <PersonNode user={user} roleName={role?.name ?? "بدون دور"} subtitle={office?.name ?? dept?.name ?? user.title ?? "إدارة الفرع"} activeItems={activeItems} pendingItems={pendingItems} completedItems={completedItems} commandItems={commandItems} otherOwnItems={otherOwnItems} delegatedTeamItems={delegatedTeamItems} onOpenItem={onOpenItem} isRoot={isRoot} childCount={children.length} expanded={expanded} onToggle={() => setExpanded((v) => !v)} incomingCalls={incomingCalls} state={state} currentUserId={currentUserId} onResolveCall={onResolveCall} unreadByItem={unreadByItem} />
     {children.length > 0 && expanded && <div className="relative flex w-max min-w-full flex-col items-center">
-      <TopologyConnectorFan childCount={children.length} activeFlags={childActiveFlags} depth={depth} />
-      <div className="flex items-start justify-center gap-10 px-5">{children.map((child) => <div key={child.id} className="flex w-[300px] shrink-0 justify-center overflow-visible"><OrgNode user={child} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} callRequests={callRequests} currentUserId={currentUserId} onResolveCall={onResolveCall} branchHeadId={branchHeadId} depth={depth + 1} /></div>)}</div>
+      <TopologyConnectorFan childWidths={childWidths} activeFlags={childActiveFlags} depth={depth} />
+      <div className="flex items-start justify-center gap-10 px-5">{children.map((child, index) => <div key={child.id} className="flex shrink-0 justify-center overflow-visible" style={{ width: childWidths[index] }}><OrgNode user={child} state={state} items={items} visibleIds={visibleIds} onOpenItem={onOpenItem} callRequests={callRequests} currentUserId={currentUserId} onResolveCall={onResolveCall} branchHeadId={branchHeadId} depth={depth + 1} unreadByItem={unreadByItem} /></div>)}</div>
     </div>}
   </div>;
 }
 
-function TopologyConnectorFan({ childCount, activeFlags, depth }: { childCount: number; activeFlags: boolean[]; depth: number }) {
-  const columnWidth = 300;
-  const gap = 40;
-  const sidePadding = 20;
-  const totalWidth = Math.max(columnWidth + sidePadding * 2, childCount * columnWidth + Math.max(0, childCount - 1) * gap + sidePadding * 2);
+function TopologyConnectorFan({ childWidths, activeFlags, depth }: { childWidths: number[]; activeFlags: boolean[]; depth: number }) {
+  const childCount = childWidths.length;
+  const totalWidth = Math.max(NODE_WIDTH, childWidths.reduce((sum, width) => sum + width, 0) + CHILD_GAP * Math.max(0, childCount - 1));
   const startX = totalWidth / 2;
+  const centers: number[] = [];
+  let cursor = 0;
+  for (const width of childWidths) {
+    centers.push(cursor + width / 2);
+    cursor += width + CHILD_GAP;
+  }
 
-  return <div className="relative h-24 w-full min-w-full">
+  return <div className="relative h-24" style={{ width: totalWidth }}>
     <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox={`0 0 ${totalWidth} 96`} preserveAspectRatio="none">
       <defs><filter id={`topology-glow-${depth}-${childCount}`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
-      {Array.from({ length: childCount }).map((_, index) => {
-        const visualIndex = childCount - 1 - index;
-        const endX = sidePadding + columnWidth / 2 + visualIndex * (columnWidth + gap);
-        const bendY = childCount === 1 ? 48 : 40 + Math.min(18, Math.abs(endX - startX) / 18);
-        const d = childCount === 1
-          ? `M${startX} 0 C${startX - 18} 28 ${startX + 18} 64 ${endX} 96`
-          : `M${startX} 0 C${startX} 30 ${endX} ${bendY} ${endX} 96`;
+      {centers.map((endX, index) => {
+        const bendY = childCount === 1 ? 48 : 38 + Math.min(20, Math.abs(endX - startX) / 22);
+        const d = childCount === 1 ? `M${startX} 0 C${startX - 18} 28 ${startX + 18} 64 ${endX} 96` : `M${startX} 0 C${startX} 28 ${endX} ${bendY} ${endX} 96`;
         const active = !!activeFlags[index];
         return <g key={index}>
           <path d={d} fill="none" stroke={active ? "rgba(103,232,249,.34)" : "rgba(103,232,249,.16)"} strokeWidth={active ? 1.55 : 1.1} vectorEffect="non-scaling-stroke" strokeLinecap="round" />
           {active && <>
-            <path d={d} fill="none" stroke="rgba(103,232,249,.98)" strokeWidth="2.4" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="2 30" filter={`url(#topology-glow-${depth}-${childCount})`}>
-              <animate attributeName="stroke-dashoffset" from="0" to="-128" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" />
-            </path>
-            <path d={d} fill="none" stroke="rgba(52,211,153,.7)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="1 44">
-              <animate attributeName="stroke-dashoffset" from="-18" to="-146" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" />
-            </path>
+            <path d={d} fill="none" stroke="rgba(103,232,249,.98)" strokeWidth="2.4" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="2 30" filter={`url(#topology-glow-${depth}-${childCount})`}><animate attributeName="stroke-dashoffset" from="0" to="-128" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" /></path>
+            <path d={d} fill="none" stroke="rgba(52,211,153,.7)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="1 44"><animate attributeName="stroke-dashoffset" from="-18" to="-146" dur="4.8s" begin={`${index * 0.22}s`} repeatCount="indefinite" /></path>
           </>}
         </g>;
       })}
@@ -301,7 +296,7 @@ function TopologyConnectorFan({ childCount, activeFlags, depth }: { childCount: 
   </div>;
 }
 
-function PersonNode({ user, roleName, subtitle, activeItems, pendingItems, completedItems, commandItems, otherOwnItems, delegatedTeamItems, onOpenItem, isRoot, childCount, expanded, onToggle, incomingCalls, state, currentUserId, onResolveCall }: { user: OrgUser; roleName: string; subtitle: string; activeItems: Assignment[]; pendingItems: Assignment[]; completedItems: Assignment[]; commandItems: Assignment[]; otherOwnItems: Assignment[]; delegatedTeamItems: Assignment[]; onOpenItem: (id: string) => void; isRoot: boolean; childCount: number; expanded: boolean; onToggle: () => void; incomingCalls: CallRequest[]; state: OrgState; currentUserId: string; onResolveCall: (id: string) => void }) {
+function PersonNode({ user, roleName, subtitle, activeItems, pendingItems, completedItems, commandItems, otherOwnItems, delegatedTeamItems, onOpenItem, isRoot, childCount, expanded, onToggle, incomingCalls, state, currentUserId, onResolveCall, unreadByItem }: { user: OrgUser; roleName: string; subtitle: string; activeItems: Assignment[]; pendingItems: Assignment[]; completedItems: Assignment[]; commandItems: Assignment[]; otherOwnItems: Assignment[]; delegatedTeamItems: Assignment[]; onOpenItem: (id: string) => void; isRoot: boolean; childCount: number; expanded: boolean; onToggle: () => void; incomingCalls: CallRequest[]; state: OrgState; currentUserId: string; onResolveCall: (id: string) => void; unreadByItem: Map<string, number> }) {
   const busy = activeItems.length > 0;
   const hasCall = incomingCalls.length > 0;
   const isDepartmentHead = roleOf(state, user)?.key === "department_head";
@@ -316,34 +311,30 @@ function PersonNode({ user, roleName, subtitle, activeItems, pendingItems, compl
     {hasCall && <div className="mt-4 space-y-2 rounded-2xl border border-amber-300/25 bg-amber-300/[0.08] p-3 shadow-[0_0_26px_rgba(251,191,36,.1)]">{incomingCalls.map((request) => { const from = state.users.find((u) => u.id === request.fromUserId); return <div key={request.id} className="flex items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-amber-300/25 bg-amber-300/10 text-amber-200">{from?.avatarDataUrl ? <img src={from.avatarDataUrl} alt={from.name} className="h-full w-full object-cover" /> : <PhoneCall size={16} />}</div><div className="min-w-0 flex-1"><div className="text-[9px] font-black text-amber-300">طلب اتصال</div><div className="mt-0.5 text-[13px] font-black leading-5 text-amber-50">{from?.name ?? "مستخدم"}</div><div className="text-[10px] text-amber-200/70">يطلب من {user.name} الاتصال به</div></div>{currentUserId === user.id && <button type="button" onClick={() => onResolveCall(request.id)} className="shrink-0 rounded-xl bg-amber-300 px-2.5 py-2 text-[9px] font-black text-slate-950">تم الاتصال</button>}</div>; })}</div>}
 
     {isDepartmentHead ? <>
-      <AssignmentGroup title="تكليفات رئيس الفرع ← رئيس القسم" subtitle="أعمال وصلت مباشرة من رئيس الفرع إلى رئيس القسم" items={commandItems} state={state} onOpenItem={onOpenItem} accent="command" />
-      <AssignmentGroup title="تكليفات موزعة على فريق القسم" subtitle="أعمال القسم المسندة حالياً إلى مسؤولي المكاتب والعناصر" items={delegatedTeamItems} state={state} onOpenItem={onOpenItem} accent="team" showAssignee />
-      {otherOwnItems.length > 0 && <AssignmentGroup title="أعمال أخرى لرئيس القسم" items={otherOwnItems} state={state} onOpenItem={onOpenItem} accent="other" />}
+      <AssignmentGroup title="تكليفات رئيس الفرع ← رئيس القسم" subtitle="أعمال وصلت مباشرة من رئيس الفرع إلى رئيس القسم" items={commandItems} state={state} onOpenItem={onOpenItem} accent="command" unreadByItem={unreadByItem} />
+      <AssignmentGroup title="تكليفات موزعة على فريق القسم" subtitle="أعمال القسم المسندة حالياً إلى مسؤولي المكاتب والعناصر" items={delegatedTeamItems} state={state} onOpenItem={onOpenItem} accent="team" showAssignee unreadByItem={unreadByItem} />
+      {otherOwnItems.length > 0 && <AssignmentGroup title="أعمال أخرى لرئيس القسم" items={otherOwnItems} state={state} onOpenItem={onOpenItem} accent="other" unreadByItem={unreadByItem} />}
     </> : <>
-      <WorkSection title="الأعمال النشطة" count={activeItems.length} tone="active" items={activeItems} onOpenItem={onOpenItem} />
-      {pendingItems.length > 0 && <WorkSection title="بانتظار / غير نشط" count={pendingItems.length} tone="pending" items={pendingItems} onOpenItem={onOpenItem} />}
-      {completedItems.length > 0 && <WorkSection title="الأعمال المنجزة — آخر 7 أيام" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} />}
+      <WorkSection title="الأعمال النشطة" count={activeItems.length} tone="active" items={activeItems} onOpenItem={onOpenItem} unreadByItem={unreadByItem} />
+      {pendingItems.length > 0 && <WorkSection title="بانتظار / غير نشط" count={pendingItems.length} tone="pending" items={pendingItems} onOpenItem={onOpenItem} unreadByItem={unreadByItem} />}
+      {completedItems.length > 0 && <WorkSection title="الأعمال المنجزة — آخر 7 أيام" count={completedItems.length} tone="done" items={completedItems} onOpenItem={onOpenItem} unreadByItem={unreadByItem} />}
     </>}
   </div>;
 }
 
-function AssignmentGroup({ title, subtitle, items, state, onOpenItem, accent, showAssignee = false }: { title: string; subtitle?: string; items: Assignment[]; state: OrgState; onOpenItem: (id: string) => void; accent: "command" | "team" | "other"; showAssignee?: boolean }) {
+function AssignmentGroup({ title, subtitle, items, state, onOpenItem, accent, unreadByItem, showAssignee = false }: { title: string; subtitle?: string; items: Assignment[]; state: OrgState; onOpenItem: (id: string) => void; accent: "command" | "team" | "other"; unreadByItem: Map<string, number>; showAssignee?: boolean }) {
   const headerClass = accent === "command" ? "text-cyan-300" : accent === "team" ? "text-indigo-300" : "text-slate-400";
-  return <div className="mt-4 border-t border-white/7 pt-3">
-    <div className={`text-[9px] font-black ${headerClass}`}>{title} <span className="font-mono opacity-70">{items.length}</span></div>
-    {subtitle && <div className="mt-1 text-[8px] leading-4 text-slate-600">{subtitle}</div>}
-    {items.length ? <div className="mt-2 space-y-2">{items.map((item) => <MissionButton key={item.id} item={item} onOpenItem={onOpenItem} tone={itemTone(item.status)} assigneeName={showAssignee ? state.users.find((u) => u.id === (item.assigneeId ?? item.ownerId))?.name : undefined} />)}</div> : <div className="mt-2 text-[9px] text-slate-700">لا توجد أعمال ضمن هذه المجموعة.</div>}
-  </div>;
+  return <div className="mt-4 border-t border-white/7 pt-3"><div className={`text-[9px] font-black ${headerClass}`}>{title} <span className="font-mono opacity-70">{items.length}</span></div>{subtitle && <div className="mt-1 text-[8px] leading-4 text-slate-600">{subtitle}</div>}{items.length ? <div className="mt-2 space-y-2">{items.map((item) => <MissionButton key={item.id} item={item} onOpenItem={onOpenItem} tone={itemTone(item.status)} unread={unreadByItem.get(item.id) ?? 0} assigneeName={showAssignee ? state.users.find((u) => u.id === (item.assigneeId ?? item.ownerId))?.name : undefined} />)}</div> : <div className="mt-2 text-[9px] text-slate-700">لا توجد أعمال ضمن هذه المجموعة.</div>}</div>;
 }
 
-function WorkSection({ title, count, tone, items, onOpenItem }: { title: string; count: number; tone: Tone; items: Assignment[]; onOpenItem: (id: string) => void }) {
+function WorkSection({ title, count, tone, items, onOpenItem, unreadByItem }: { title: string; count: number; tone: Tone; items: Assignment[]; onOpenItem: (id: string) => void; unreadByItem: Map<string, number> }) {
   const icon = tone === "active" ? <CircleDot size={9} className="animate-pulse" /> : tone === "done" ? <CheckCircle2 size={10} /> : <Clock3 size={10} />;
-  return <div className="mt-4 border-t border-white/7 pt-3"><div className={`flex items-center gap-2 text-[9px] font-black ${tone === "active" ? "text-emerald-300" : tone === "pending" ? "text-amber-300/80" : "text-slate-500"}`}>{icon}{title}<span className="font-mono opacity-70">{count}</span></div>{items.length ? <div className="mt-2 space-y-2">{items.map((item) => <MissionButton key={item.id} item={item} onOpenItem={onOpenItem} tone={tone} />)}</div> : tone === "active" ? <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-600"><span className="h-2 w-2 rounded-full bg-slate-700" />لا يوجد عمل نشط حالياً</div> : null}</div>;
+  return <div className="mt-4 border-t border-white/7 pt-3"><div className={`flex items-center gap-2 text-[9px] font-black ${tone === "active" ? "text-emerald-300" : tone === "pending" ? "text-amber-300/80" : "text-slate-500"}`}>{icon}{title}<span className="font-mono opacity-70">{count}</span></div>{items.length ? <div className="mt-2 space-y-2">{items.map((item) => <MissionButton key={item.id} item={item} onOpenItem={onOpenItem} tone={tone} unread={unreadByItem.get(item.id) ?? 0} />)}</div> : tone === "active" ? <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-600"><span className="h-2 w-2 rounded-full bg-slate-700" />لا يوجد عمل نشط حالياً</div> : null}</div>;
 }
 
-function MissionButton({ item, onOpenItem, tone, assigneeName }: { item: Assignment; onOpenItem: (id: string) => void; tone: Tone; assigneeName?: string }) {
-  return <button type="button" onClick={() => onOpenItem(item.id)} className={`w-full rounded-xl border px-3 py-2.5 text-right transition hover:-translate-y-0.5 ${tone === "active" ? "border-emerald-300/12 bg-emerald-300/[0.035] hover:border-emerald-300/30" : tone === "pending" ? "border-amber-300/10 bg-amber-300/[0.025] hover:border-amber-300/20" : "border-white/7 bg-white/[0.018] hover:border-cyan-300/15"}`}>
-    <div className="flex items-center gap-2"><span className={tone === "active" ? "text-emerald-300/80" : tone === "pending" ? "text-amber-300/65" : "text-slate-600"}>{item.kind === "project" ? <BriefcaseBusiness size={13} /> : <ListTodo size={13} />}</span><span className={`min-w-0 flex-1 text-[10px] font-bold leading-5 ${tone === "active" ? "text-slate-200" : tone === "pending" ? "text-slate-400" : "text-slate-500"}`}>{item.title}</span><span className="shrink-0 text-[8px] text-slate-600">{statusMeta[item.status].label}</span></div>
+function MissionButton({ item, onOpenItem, tone, unread, assigneeName }: { item: Assignment; onOpenItem: (id: string) => void; tone: Tone; unread: number; assigneeName?: string }) {
+  return <button type="button" onClick={() => onOpenItem(item.id)} className={`relative w-full rounded-xl border px-3 py-2.5 text-right transition hover:-translate-y-0.5 ${unread > 0 ? "border-cyan-300/35 bg-cyan-300/[0.085] shadow-[0_0_22px_rgba(34,211,238,.08)]" : tone === "active" ? "border-emerald-300/12 bg-emerald-300/[0.035] hover:border-emerald-300/30" : tone === "pending" ? "border-amber-300/10 bg-amber-300/[0.025] hover:border-amber-300/20" : "border-white/7 bg-white/[0.018] hover:border-cyan-300/15"}`}>
+    <div className="flex items-center gap-2"><span className={unread > 0 ? "text-cyan-300" : tone === "active" ? "text-emerald-300/80" : tone === "pending" ? "text-amber-300/65" : "text-slate-600"}>{item.kind === "project" ? <BriefcaseBusiness size={13} /> : <ListTodo size={13} />}</span><span className={`min-w-0 flex-1 text-[10px] font-bold leading-5 ${unread > 0 ? "text-white" : tone === "active" ? "text-slate-200" : tone === "pending" ? "text-slate-400" : "text-slate-500"}`}>{item.title}</span>{unread > 0 && <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-cyan-300 px-1 text-[9px] font-black text-slate-950">{unread}</span>}<span className="shrink-0 text-[8px] text-slate-600">{statusMeta[item.status].label}</span></div>
     {assigneeName && <div className="mt-1 pr-5 text-[8px] font-bold text-indigo-300/65">← {assigneeName}</div>}
   </button>;
 }
