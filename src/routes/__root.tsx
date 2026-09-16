@@ -6,6 +6,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import BranchEmblem, { BRANCH_EMBLEM_DATA_URI } from "../v8/BranchEmblem";
 import FirstLoginPasswordGate from "../v8/FirstLoginPasswordGate";
+import ReliableMobileSync from "../v8/ReliableMobileSync";
 
 function NotFoundComponent() {
   return (
@@ -82,5 +83,5 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  return <QueryClientProvider client={queryClient}><Outlet /><FirstLoginPasswordGate /><Toaster richColors position="top-center" dir="rtl" /></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><Outlet /><ReliableMobileSync /><FirstLoginPasswordGate /><Toaster richColors position="top-center" dir="rtl" /></QueryClientProvider>;
 }
