@@ -88,8 +88,6 @@ export const SYSTEM_ADMIN_USER: OrgUser = {
   mustChangePassword: false,
 };
 
-// These are the real operational role types required by the application.
-// No users, departments, offices, projects, or tasks are automatically created.
 export const defaultRoles: OrgRole[] = [
   { id: "role-branch-head", key: "branch_head", name: "رئيس الفرع", system: true, permissions: ["manage_structure", "manage_users", "manage_roles", "view_all_tree", "create_projects", "create_tasks", "assign_department_tasks", "assign_team_tasks", "approve_work", "view_reports"] },
   { id: "role-department-head", key: "department_head", name: "رئيس قسم", system: true, permissions: ["view_team_tree", "create_tasks", "assign_team_tasks", "view_reports"] },
@@ -129,7 +127,7 @@ export function normalizeOrgState(value: Partial<OrgState> | OrgState): OrgState
   const offices = (Array.isArray(value.offices) ? value.offices : []).filter((o) => !deletedOffices.has(o.id) && !deletedDepartments.has(o.departmentId));
   const users = (Array.isArray(value.users) ? value.users : [])
     .filter((u) => !deletedUsers.has(u.id))
-    .map((u) => ({ ...u, mustChangePassword: u.mustChangePassword ?? true }));
+    .map((u) => ({ ...u, mustChangePassword: u.mustChangePassword ?? false }));
 
   return {
     branchName: value.branchName || seedOrgState.branchName,
