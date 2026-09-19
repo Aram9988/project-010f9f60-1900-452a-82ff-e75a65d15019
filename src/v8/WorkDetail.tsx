@@ -84,7 +84,9 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
   const canSubmitCompletion = assignedToMe && canWork && ["active", "waiting"].includes(item.status) && !!approvalTargetId && approvalTargetId !== currentUser.id;
   const canCloseOwn = assignedToMe && canWork && ["active", "waiting"].includes(item.status) && !approvalTargetId;
   const canApprove = !readOnlyProject && item.status === "review" && (approvalTargetId === currentUser.id || (!approvalTargetId && isBranch));
-  const canLifecycle = isBranch || (!isProject && isDept && item.departmentId === currentUser.departmentId);
+  const administrativeTeamIds = currentRole?.key === "administrative" ? new Set([currentUser.id, ...descendants(org, currentUser.id).map((u) => u.id)]) : new Set<string>();
+  const administrativeOwnsTask = currentRole?.key === "administrative" && !isProject && (item.issuedById === currentUser.id || administrativeTeamIds.has(item.assigneeId ?? item.ownerId ?? ""));
+  const canLifecycle = isBranch || (!isProject && isDept && item.departmentId === currentUser.departmentId) || administrativeOwnsTask;
   const studyWaitingApproval = isProject && (item.projectPhase ?? "execution") === "study" && item.status === "done" && item.ministryApproval === "waiting";
   const canStartExecution = studyWaitingApproval && isBranch && !item.archivedAt;
   const canReopen = canLifecycle && !item.archivedAt && item.status === "done" && !studyWaitingApproval;
