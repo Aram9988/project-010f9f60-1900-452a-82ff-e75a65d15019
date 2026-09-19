@@ -40,9 +40,15 @@ export default function AccountTools() {
 
   useEffect(() => {
     const sync = () => setSessionUserId(sessionStorage.getItem(SESSION_KEY));
+    const openTools = () => setOpen(true);
     const timer = window.setInterval(sync, 500);
     window.addEventListener("focus", sync);
-    return () => { window.clearInterval(timer); window.removeEventListener("focus", sync); };
+    window.addEventListener("open-account-tools", openTools);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("open-account-tools", openTools);
+    };
   }, []);
 
   const user = useMemo(() => sessionUserId && sessionUserId !== SYSTEM_ADMIN_ID ? org.users.find((item) => item.id === sessionUserId && item.active) : undefined, [org.users, sessionUserId]);
@@ -94,9 +100,6 @@ export default function AccountTools() {
   }
 
   return <>
-    <button type="button" onClick={() => setOpen(true)} className="account-tools-button fixed bottom-24 left-4 z-[70] flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-[11px] font-black shadow-2xl backdrop-blur md:bottom-5">
-      {isAdmin ? <ShieldCheck size={15} /> : <UserRound size={15} />}{isAdmin ? "أدوات المدير" : "حسابي"}
-    </button>
     {open && <div className="fixed inset-0 z-[180] grid place-items-center overflow-y-auto bg-black/75 p-4 backdrop-blur-lg">
       <div className="tech-panel relative my-8 w-full max-w-lg p-6">
         <button type="button" onClick={() => setOpen(false)} className="absolute left-4 top-4 grid h-9 w-9 place-items-center rounded-xl border border-white/10"><X size={15} /></button>
