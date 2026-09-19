@@ -58,12 +58,12 @@
 
 @layer base {
   * { border-color: var(--color-border); }
-  html { min-height: 100%; background: #06101d; }
+  html { min-height: 100%; background: #062923; }
   html[dir="rtl"] { text-align: right; }
   body {
     min-height: 100vh;
     margin: 0;
-    background: #06101d;
+    background: #062923;
     color: #eef5fb;
     font-family: var(--font-sans);
     font-feature-settings: "kern", "liga";
@@ -77,21 +77,23 @@
 @layer components {
   .tech-shell {
     background:
-      radial-gradient(circle at 8% 0%, rgba(56, 189, 248, .08), transparent 32rem),
-      radial-gradient(circle at 90% 18%, rgba(99, 102, 241, .09), transparent 34rem),
-      linear-gradient(180deg, #07111e 0%, #08121f 48%, #060e19 100%);
+      radial-gradient(circle at 12% -5%, rgba(205, 180, 116, .13), transparent 34rem),
+      radial-gradient(circle at 88% 18%, rgba(22, 110, 89, .18), transparent 38rem),
+      linear-gradient(180deg, #07352e 0%, #062923 46%, #041f1c 100%);
   }
   .tech-grid {
     background-image:
-      linear-gradient(rgba(148, 163, 184, .028) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, .028) 1px, transparent 1px);
-    background-size: 34px 34px;
-    mask-image: linear-gradient(to bottom, black, rgba(0,0,0,.55) 65%, transparent);
+      linear-gradient(30deg, rgba(199,178,122,.05) 12%, transparent 12.5%, transparent 87%, rgba(199,178,122,.05) 87.5%),
+      linear-gradient(150deg, rgba(199,178,122,.05) 12%, transparent 12.5%, transparent 87%, rgba(199,178,122,.05) 87.5%),
+      linear-gradient(30deg, rgba(199,178,122,.035) 12%, transparent 12.5%, transparent 87%, rgba(199,178,122,.035) 87.5%);
+    background-size: 48px 84px;
+    background-position: 0 0, 0 0, 24px 42px;
+    mask-image: linear-gradient(to bottom, black, rgba(0,0,0,.72) 72%, transparent);
   }
   .tech-panel {
     border: 1px solid rgba(255,255,255,.085);
     border-radius: 24px;
-    background: linear-gradient(180deg, rgba(255,255,255,.047), rgba(255,255,255,.025));
+    background: linear-gradient(180deg, rgba(11,67,57,.76), rgba(4,34,30,.78));
     box-shadow: 0 22px 60px rgba(1, 8, 20, .28), inset 0 1px 0 rgba(255,255,255,.025);
     backdrop-filter: blur(12px);
   }
@@ -302,4 +304,36 @@
   #print-report [class*="bg-"] { background: white !important; }
   #print-report [class*="border-"] { border-color: #dbe4ee !important; }
   .no-print { display: none !important; }
+}
+
+/* 2026 emerald-gold identity inspired by the official branch visual language */
+:root {
+  --branch-gold: #c7b27a;
+  --branch-gold-soft: #e0cd99;
+  --branch-emerald: #0a4a3f;
+  --branch-emerald-deep: #052923;
+}
+.tech-shell .text-cyan-300,
+.tech-shell .text-cyan-200 { color: var(--branch-gold-soft) !important; }
+.tech-shell .bg-cyan-300 { background-color: var(--branch-gold) !important; }
+.tech-shell .from-cyan-300 { --tw-gradient-from: var(--branch-gold) var(--tw-gradient-from-position) !important; }
+.tech-shell .to-indigo-400 { --tw-gradient-to: #7f6b43 var(--tw-gradient-to-position) !important; }
+.tech-shell .nav-btn-active {
+  border-color: rgba(199,178,122,.32);
+  background: rgba(199,178,122,.09);
+  color: #ead9aa;
+}
+.tech-shell .tech-field:focus {
+  border-color: rgba(199,178,122,.45);
+  box-shadow: 0 0 0 4px rgba(199,178,122,.07), 0 0 24px rgba(199,178,122,.06);
+}
+.gold-kicker { color: rgba(224,205,153,.68); font-size: 10px; font-weight: 900; letter-spacing: .18em; }
+.gold-action { background: linear-gradient(135deg, #d2bd84, #aa9158); color: #092c26; box-shadow: 0 10px 26px rgba(199,178,122,.12); }
+.account-tools-button { border-color: rgba(199,178,122,.24); background: rgba(7,53,46,.94); color: #e0cd99; }
+.account-tools-button:hover { border-color: rgba(224,205,153,.45); background: rgba(14,76,64,.96); }
+.topology-fullscreen {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(199,178,122,.08), transparent 34rem),
+    radial-gradient(circle at 15% 85%, rgba(19,113,91,.12), transparent 30rem),
+    linear-gradient(180deg, #07352e 0%, #052923 100%) !important;
 }
