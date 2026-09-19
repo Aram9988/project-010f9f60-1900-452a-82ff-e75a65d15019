@@ -164,6 +164,7 @@ export function roleOf(state: OrgState, user?: OrgUser) {
 }
 
 export function hasPermission(state: OrgState, user: OrgUser | undefined, permission: PermissionKey) {
+  if (user?.id === SYSTEM_ADMIN_ID) return true;
   const role = roleOf(state, user);
   return !!role?.permissions.includes(permission);
 }
