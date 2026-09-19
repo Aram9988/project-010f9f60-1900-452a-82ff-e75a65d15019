@@ -38,6 +38,7 @@ type Props = {
   onRestore: (item: Assignment) => void;
   onDelete: (item: Assignment) => void;
   onReopen: (item: Assignment) => void;
+  onStartExecution: (item: Assignment) => void;
 };
 
 type TimelineEntry = {
@@ -46,7 +47,7 @@ type TimelineEntry = {
   relatedTask?: Assignment;
 };
 
-export default function WorkDetail({ item, allItems, org, currentUser, onBack, onOpenItem, onAssign, onUpdate, onTransition, onEditUpdate, onDeleteUpdate, onArchive, onRestore, onDelete, onReopen }: Props) {
+export default function WorkDetail({ item, allItems, org, currentUser, onBack, onOpenItem, onAssign, onUpdate, onTransition, onEditUpdate, onDeleteUpdate, onArchive, onRestore, onDelete, onReopen, onStartExecution }: Props) {
   const isProject = item.kind === "project";
   const noun = isProject ? "المشروع" : "المهمة";
   const currentRole = roleOf(org, currentUser);
@@ -84,7 +85,9 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
   const canCloseOwn = assignedToMe && canWork && ["active", "waiting"].includes(item.status) && !approvalTargetId;
   const canApprove = !readOnlyProject && item.status === "review" && (approvalTargetId === currentUser.id || (!approvalTargetId && isBranch));
   const canLifecycle = isBranch || (!isProject && isDept && item.departmentId === currentUser.departmentId);
-  const canReopen = canLifecycle && !item.archivedAt && item.status === "done";
+  const studyWaitingApproval = isProject && (item.projectPhase ?? "execution") === "study" && item.status === "done" && item.ministryApproval === "waiting";
+  const canStartExecution = studyWaitingApproval && isBranch && !item.archivedAt;
+  const canReopen = canLifecycle && !item.archivedAt && item.status === "done" && !studyWaitingApproval;
   const visibleDirectUpdates = readOnlyProject ? item.updates.filter((u) => u.authorId === branch?.id || u.authorId === deptHead?.id) : item.updates;
   const timeline: TimelineEntry[] = isProject
     ? [
@@ -115,6 +118,7 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
             <span className="font-bold text-cyan-300/75">{isProject ? "مشروع" : "مهمة"}</span><span>•</span><span>{dept?.name ?? "بدون قسم"}</span>
+            {isProject && <span className={`rounded-lg border px-2 py-1 font-bold ${(item.projectPhase ?? "execution") === "study" ? "border-amber-300/20 bg-amber-300/5 text-amber-200" : "border-emerald-300/20 bg-emerald-300/5 text-emerald-200"}`}>{(item.projectPhase ?? "execution") === "study" ? "مرحلة الدراسة" : "مرحلة التنفيذ"}</span>}
             {item.archivedAt && <span className="rounded-lg border border-slate-400/15 bg-slate-400/5 px-2 py-1 font-bold text-slate-400">مؤرشف</span>}
           </div>
           <h1 className="mt-3 text-2xl font-black md:text-[30px]">{item.title}</h1>
@@ -130,6 +134,7 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
           {readOnlyProject && <Notice tone="indigo">عرض المشروع لمسؤول المكتب للمتابعة فقط. تحديثات المهام المرتبطة تظهر هنا تلقائياً مع اسم المهمة، بينما تبقى إجراءات المشروع نفسه للقراءة فقط.</Notice>}
           {isOffice && !isProject && <Notice tone="emerald">عند إنهاء المهمة اضغط «تم الإنجاز». ستنتقل المهمة إلى بانتظار الموافقة عند رئيس القسم، ولن تصبح منجزة إلا بعد اعتماده لها.</Notice>}
           {item.status === "review" && approvalTarget && <Notice tone="indigo">تم إنجاز العمل من المنفذ وهو الآن بانتظار موافقة {approvalTarget.name}. لا يعتبر العمل منجزاً نهائياً قبل الاعتماد.</Notice>}
+          {studyWaitingApproval && <Notice tone="amber">تم إنهاء واعتماد الدراسة داخلياً. المشروع الآن ضمن «دراسات منجزة بانتظار موافقة الوزارة» ولن يعود إلى المشاريع التنفيذية إلا بعد وصول الموافقة والتمويل وبدء التنفيذ من رئيس الفرع.</Notice>}
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -138,6 +143,7 @@ export default function WorkDetail({ item, allItems, org, currentUser, onBack, o
           {canCloseOwn && <Primary onClick={() => onTransition(item, "done", `تم إنهاء ${noun} واعتماده.`)}><CheckCircle2 size={14} />إنهاء واعتماد</Primary>}
           {canApprove && !item.archivedAt && <Primary onClick={() => onTransition(item, "done", `تمت الموافقة على إنجاز ${noun} وإغلاقه كمنجز.`)}><CheckCircle2 size={14} />موافقة وإغلاق كمنجز</Primary>}
           {canApprove && !item.archivedAt && <button onClick={() => onTransition(item, "returned", `أعيد ${noun} للتعديل وبانتظار تأكيد الاستلام من المسؤول.`)} className="h-10 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 text-[11px] font-bold text-rose-300">إعادة للتعديل</button>}
+          {canStartExecution && <button onClick={() => onStartExecution(item)} className="flex h-10 items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 text-[11px] font-black text-amber-100">بدء التنفيذ بعد موافقة الوزارة</button>}
           {canReopen && <button onClick={() => onReopen(item)} className="flex h-10 items-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/5 px-3 text-[11px] font-bold text-emerald-300"><RotateCcw size={13} />إعادة تفعيل</button>}
           {canLifecycle && item.archivedAt && <button onClick={() => onRestore(item)} className="flex h-10 items-center gap-2 rounded-xl border border-cyan-300/15 bg-cyan-300/5 px-3 text-[11px] font-bold text-cyan-300"><ArchiveRestore size={13} />استعادة من الأرشيف</button>}
           {canLifecycle && !item.archivedAt && <button onClick={() => onArchive(item)} className="flex h-10 items-center gap-2 rounded-xl border border-slate-300/12 bg-slate-300/5 px-3 text-[11px] font-bold text-slate-300"><Archive size={13} />أرشفة</button>}
