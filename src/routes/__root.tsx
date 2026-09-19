@@ -8,6 +8,7 @@ import FirstLoginPasswordGate from "../v8/FirstLoginPasswordGate";
 import ReliableMobileSync from "../v8/ReliableMobileSync";
 import TopologyAutoConnectors from "../v8/TopologyAutoConnectors";
 import WorkUnreadIndicators from "../v8/WorkUnreadIndicators";
+import AccountTools from "../v8/AccountTools";
 
 function NotFoundComponent() {
   return (
@@ -83,5 +84,5 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  return <QueryClientProvider client={queryClient}><Outlet /><ReliableMobileSync /><TopologyAutoConnectors /><WorkUnreadIndicators /><FirstLoginPasswordGate /><Toaster richColors position="top-center" dir="rtl" /></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><Outlet /><ReliableMobileSync /><TopologyAutoConnectors /><WorkUnreadIndicators /><AccountTools /><FirstLoginPasswordGate /><Toaster richColors position="top-center" dir="rtl" /></QueryClientProvider>;
 }
