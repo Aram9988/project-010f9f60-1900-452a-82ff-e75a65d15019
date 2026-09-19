@@ -94,7 +94,7 @@ export const defaultRoles: OrgRole[] = [
   { id: "role-office-responsible", key: "office_responsible", name: "مسؤول مكتب", system: true, permissions: ["view_team_tree", "create_tasks", "assign_team_tasks"] },
   { id: "role-member", key: "member", name: "عنصر", system: true, permissions: [] },
   { id: "role-diwan", key: "diwan", name: "ديوان", system: true, permissions: ["view_reports"] },
-  { id: "role-administrative", key: "administrative", name: "إداري", system: true, permissions: [] },
+  { id: "role-administrative", key: "administrative", name: "إداري", system: true, permissions: ["view_team_tree", "create_tasks", "assign_team_tasks", "view_reports"] },
   { id: "role-vehicles", key: "vehicles", name: "آليات", system: true, permissions: [] },
 ];
 
