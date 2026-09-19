@@ -179,19 +179,12 @@ export default function TopologyAutoConnectors() {
           const wave = svgEl("path");
           wave.setAttribute("d", d);
           wave.setAttribute("fill", "none");
-          wave.setAttribute("stroke", "rgba(224,205,153,.98)");
+          wave.setAttribute("stroke", "rgba(216,200,148,.98)");
           wave.setAttribute("stroke-width", "2.7");
           wave.setAttribute("stroke-linecap", "round");
           wave.setAttribute("vector-effect", "non-scaling-stroke");
-          wave.setAttribute("stroke-dasharray", "3 30");
-          wave.setAttribute("filter", "drop-shadow(0 0 5px rgba(199,178,122,.9))");
-          const dash = svgEl("animate");
-          dash.setAttribute("attributeName", "stroke-dashoffset");
-          dash.setAttribute("from", "0");
-          dash.setAttribute("to", "-198");
-          dash.setAttribute("dur", "4.8s");
-          dash.setAttribute("repeatCount", "indefinite");
-          wave.appendChild(dash);
+          wave.setAttribute("filter", "drop-shadow(0 0 5px rgba(188,168,117,.9))");
+          wave.setAttribute("class", "topology-auto-wave");
           svg.appendChild(wave);
 
           [0, 1].forEach((index) => {
