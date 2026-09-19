@@ -167,22 +167,42 @@ export default function TopologyAutoConnectors() {
           const glow = svgEl("path");
           glow.setAttribute("d", d);
           glow.setAttribute("fill", "none");
-          glow.setAttribute("stroke", "rgba(103,232,249,.22)");
-          glow.setAttribute("stroke-width", "5");
+          glow.setAttribute("stroke", "rgba(199,178,122,.26)");
+          glow.setAttribute("stroke-width", "6");
           glow.setAttribute("stroke-linecap", "round");
           glow.setAttribute("vector-effect", "non-scaling-stroke");
-          glow.setAttribute("filter", "blur(2px)");
+          glow.setAttribute("filter", "blur(2.4px)");
           svg.insertBefore(glow, base);
 
-          [0, 1, 2].forEach((index) => {
+          // A bright travelling wave remains visible even on browsers where SVG animateMotion
+          // can be throttled. The dash offset moves from the manager toward the active person.
+          const wave = svgEl("path");
+          wave.setAttribute("d", d);
+          wave.setAttribute("fill", "none");
+          wave.setAttribute("stroke", "rgba(224,205,153,.98)");
+          wave.setAttribute("stroke-width", "2.7");
+          wave.setAttribute("stroke-linecap", "round");
+          wave.setAttribute("vector-effect", "non-scaling-stroke");
+          wave.setAttribute("stroke-dasharray", "3 30");
+          wave.setAttribute("filter", "drop-shadow(0 0 5px rgba(199,178,122,.9))");
+          const dash = svgEl("animate");
+          dash.setAttribute("attributeName", "stroke-dashoffset");
+          dash.setAttribute("from", "0");
+          dash.setAttribute("to", "-198");
+          dash.setAttribute("dur", "4.8s");
+          dash.setAttribute("repeatCount", "indefinite");
+          wave.appendChild(dash);
+          svg.appendChild(wave);
+
+          [0, 1].forEach((index) => {
             const dot = svgEl("circle");
-            dot.setAttribute("r", index === 0 ? "2.6" : "1.8");
-            dot.setAttribute("fill", index === 1 ? "rgba(52,211,153,.95)" : "rgba(103,232,249,.98)");
-            dot.setAttribute("filter", "drop-shadow(0 0 5px rgba(103,232,249,.95))");
+            dot.setAttribute("r", index === 0 ? "3" : "2");
+            dot.setAttribute("fill", index === 0 ? "rgba(224,205,153,.98)" : "rgba(52,211,153,.96)");
+            dot.setAttribute("filter", "drop-shadow(0 0 6px rgba(199,178,122,.95))");
             const motion = svgEl("animateMotion");
             motion.setAttribute("path", d);
-            motion.setAttribute("dur", "5.4s");
-            motion.setAttribute("begin", `${index * -1.8}s`);
+            motion.setAttribute("dur", "4.8s");
+            motion.setAttribute("begin", index === 0 ? "0s" : "-2.4s");
             motion.setAttribute("repeatCount", "indefinite");
             motion.setAttribute("rotate", "auto");
             dot.appendChild(motion);
