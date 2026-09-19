@@ -3,6 +3,8 @@ export type View = "overview" | "tasks" | "reports" | "admin" | "tree";
 export type TaskStatus = "new" | "active" | "waiting" | "review" | "returned" | "done";
 export type Priority = "normal" | "important" | "urgent";
 export type WorkType = "project" | "task";
+export type ProjectPhase = "study" | "execution";
+export type MinistryApprovalState = "not_required" | "waiting" | "approved";
 
 export type DemoUser = {
   id: string;
@@ -44,6 +46,11 @@ export type Assignment = {
   location?: string;
   referenceNumber?: string;
   parentProjectId?: string;
+  projectPhase?: ProjectPhase;
+  ministryApproval?: MinistryApprovalState;
+  studyCompletedAt?: string;
+  ministryApprovedAt?: string;
+  executionStartedAt?: string;
   createdAt: string;
   updatedAt: string;
   issuedById: string;
