@@ -481,3 +481,222 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .topology-auto-wave { animation-duration: 4.2s !important; }
 }
+
+
+/* Balanced command palette: emerald atmosphere + graphite/navy surfaces + antique gold + muted teal */
+:root {
+  --cmd-bg: #031815;
+  --cmd-bg-deep: #02110f;
+  --cmd-surface: #09141d;
+  --cmd-surface-2: #0c1923;
+  --cmd-surface-3: #10202a;
+  --cmd-border: rgba(220, 210, 184, .11);
+  --cmd-border-gold: rgba(199, 173, 114, .22);
+  --cmd-gold: #c7ad72;
+  --cmd-gold-soft: #e2d3a4;
+  --cmd-teal: #6fa79f;
+  --cmd-teal-soft: #9cc7c0;
+  --cmd-text: #f2eee5;
+  --cmd-muted: #87949d;
+  --cmd-muted-2: #66737e;
+}
+
+/* Keep the green identity in the atmosphere, not on every component. */
+.tech-shell {
+  background:
+    radial-gradient(circle at 12% 6%, rgba(22, 92, 78, .14), transparent 34rem),
+    radial-gradient(circle at 86% 78%, rgba(23, 74, 66, .10), transparent 40rem),
+    radial-gradient(circle at 50% -12%, rgba(199, 173, 114, .055), transparent 32rem),
+    linear-gradient(180deg, #05251f 0%, var(--cmd-bg) 48%, var(--cmd-bg-deep) 100%) !important;
+}
+
+/* Gold mosaic stays atmospheric and quiet. */
+.tech-grid {
+  opacity: .42 !important;
+  filter: saturate(.82) contrast(.94);
+}
+
+/* Primary application surfaces are graphite/navy so the green background can breathe. */
+.tech-panel {
+  border-color: var(--cmd-border) !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(111, 167, 159, .045), transparent 16rem),
+    linear-gradient(180deg, rgba(13, 27, 37, .94), rgba(7, 18, 26, .96)) !important;
+  box-shadow:
+    0 22px 58px rgba(0, 0, 0, .31),
+    inset 0 1px 0 rgba(255,255,255,.025) !important;
+}
+
+.branch-header {
+  background:
+    linear-gradient(90deg, rgba(5, 17, 24, .98), rgba(9, 23, 31, .98) 50%, rgba(5, 17, 24, .98)) !important;
+  border-bottom-color: rgba(199, 173, 114, .15) !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,.30), inset 0 -1px 0 rgba(199,173,114,.035);
+}
+
+.branch-sidebar {
+  border-left-color: rgba(199, 173, 114, .10) !important;
+  background:
+    linear-gradient(180deg, rgba(7, 18, 26, .76), rgba(5, 15, 21, .58)) !important;
+  box-shadow: inset 1px 0 0 rgba(255,255,255,.015);
+  backdrop-filter: blur(12px);
+}
+
+.branch-main {
+  background:
+    radial-gradient(circle at 45% 2%, rgba(111,167,159,.025), transparent 30rem);
+}
+
+.branch-user-menu {
+  border-color: var(--cmd-border-gold) !important;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(199,173,114,.055), transparent 12rem),
+    linear-gradient(180deg, rgba(14, 27, 37, .995), rgba(7, 17, 24, .995)) !important;
+}
+
+/* Login: green environment outside, refined dark command surfaces inside. */
+.login-frame {
+  border-color: rgba(199, 173, 114, .17) !important;
+  background: var(--cmd-surface) !important;
+  box-shadow:
+    0 34px 90px rgba(0,0,0,.46),
+    0 0 0 1px rgba(111,167,159,.035),
+    inset 0 1px 0 rgba(255,255,255,.02) !important;
+}
+.login-brand-panel {
+  border-left-color: rgba(199, 173, 114, .11) !important;
+  background:
+    radial-gradient(circle at 76% 28%, rgba(111,167,159,.055), transparent 18rem),
+    linear-gradient(145deg, #0d1c26 0%, #09151e 62%, #08131b 100%) !important;
+}
+.login-form-panel {
+  background:
+    radial-gradient(circle at 18% 42%, rgba(199,173,114,.035), transparent 16rem),
+    linear-gradient(180deg, #0a1720 0%, #07131b 100%) !important;
+}
+.login-lock-mark {
+  border-color: rgba(199,173,114,.30) !important;
+  background: linear-gradient(145deg, rgba(199,173,114,.11), rgba(111,167,159,.06)) !important;
+  color: var(--cmd-gold-soft) !important;
+  box-shadow: 0 10px 26px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.025);
+}
+.login-submit {
+  border: 1px solid rgba(226,211,164,.20);
+  background: linear-gradient(135deg, #d7c48e 0%, #bca166 56%, #9c824e 100%) !important;
+  color: #06141a !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.22), 0 0 24px rgba(199,173,114,.07);
+  transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+}
+.login-submit:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(0,0,0,.28), 0 0 28px rgba(199,173,114,.10);
+}
+
+/* Inputs use neutral blue-black rather than more green. */
+.tech-field,
+.branch-header input {
+  border-color: rgba(220,210,184,.10) !important;
+  background: rgba(4, 13, 19, .64) !important;
+  color: var(--cmd-text) !important;
+}
+.tech-field:focus,
+.branch-header input:focus {
+  border-color: rgba(111,167,159,.42) !important;
+  box-shadow: 0 0 0 4px rgba(111,167,159,.055), 0 0 24px rgba(111,167,159,.04) !important;
+}
+
+/* Information uses muted teal. Important controls use gold. */
+.tech-shell .text-cyan-300,
+.tech-shell .text-cyan-200 {
+  color: var(--cmd-teal-soft) !important;
+}
+.tech-shell .text-cyan-300\/60,
+.tech-shell .text-cyan-300\/75 {
+  color: rgba(156,199,192,.68) !important;
+}
+.tech-shell .bg-cyan-300 {
+  background-color: var(--cmd-gold) !important;
+}
+.tech-shell .from-cyan-300 {
+  --tw-gradient-from: #d8c38c var(--tw-gradient-from-position) !important;
+}
+.tech-shell .to-indigo-400 {
+  --tw-gradient-to: #9e8452 var(--tw-gradient-to-position) !important;
+}
+
+.nav-btn {
+  color: #8d99a3 !important;
+}
+.nav-btn:hover {
+  border-color: rgba(111,167,159,.12) !important;
+  background: rgba(111,167,159,.045) !important;
+  color: #e9ece8 !important;
+}
+.nav-btn-active {
+  border-color: rgba(199,173,114,.24) !important;
+  background:
+    linear-gradient(90deg, rgba(199,173,114,.11), rgba(111,167,159,.035)) !important;
+  color: var(--cmd-gold-soft) !important;
+  box-shadow: inset 3px 0 0 rgba(199,173,114,.62);
+}
+
+.report-action {
+  border-color: rgba(220,210,184,.10) !important;
+  background: rgba(12,25,35,.88) !important;
+  color: #b8c0c5 !important;
+}
+.report-action:hover {
+  border-color: rgba(199,173,114,.24) !important;
+  background: rgba(199,173,114,.065) !important;
+  color: var(--cmd-gold-soft) !important;
+}
+
+/* Normalize the many slate utility tones into one coherent neutral family. */
+.tech-shell .text-slate-100 { color: #f2eee5 !important; }
+.tech-shell .text-slate-200 { color: #dde2df !important; }
+.tech-shell .text-slate-300 { color: #c2c9ca !important; }
+.tech-shell .text-slate-400 { color: #9aa6ad !important; }
+.tech-shell .text-slate-500 { color: #7f8d97 !important; }
+.tech-shell .text-slate-600 { color: #61707b !important; }
+
+/* Keep status colors semantic but slightly desaturated so they live in the same system. */
+.tech-shell .text-blue-300 { color: #8eb6d6 !important; }
+.tech-shell .text-violet-300 { color: #b7a7cf !important; }
+.tech-shell .text-emerald-300 { color: #89c2a6 !important; }
+.tech-shell .text-amber-300,
+.tech-shell .text-amber-200,
+.tech-shell .text-amber-100 { color: #d8bd7c !important; }
+.tech-shell .text-rose-300 { color: #d9939d !important; }
+
+/* The tree uses the same neutral cards while active routes stand out with gold motion. */
+.topology-fullscreen {
+  background:
+    radial-gradient(circle at 50% -8%, rgba(199,173,114,.055), transparent 34rem),
+    radial-gradient(circle at 15% 76%, rgba(18,84,72,.08), transparent 34rem),
+    linear-gradient(180deg, #071b1c 0%, #041318 62%, #031016 100%) !important;
+}
+.topology-person-node {
+  border-color: rgba(220,210,184,.095) !important;
+  background:
+    linear-gradient(180deg, rgba(13,27,37,.96), rgba(7,17,25,.97)) !important;
+}
+.topology-person-node:hover {
+  border-color: rgba(199,173,114,.27) !important;
+  box-shadow: 0 20px 46px rgba(0,0,0,.36), 0 0 30px rgba(199,173,114,.06) !important;
+}
+.topology-auto-wave {
+  stroke: #d8c38c !important;
+  filter: drop-shadow(0 0 5px rgba(199,173,114,.72));
+}
+
+/* Modal backdrops and floating sheets should feel like the same product. */
+.tech-shell [role="dialog"] {
+  color: var(--cmd-text);
+}
+
+/* Subtle gold selection instead of the old bright cyan. */
+::selection {
+  background: rgba(199,173,114,.25) !important;
+  color: #fffdf7 !important;
+}
