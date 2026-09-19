@@ -337,3 +337,147 @@
     radial-gradient(circle at 15% 85%, rgba(19,113,91,.12), transparent 30rem),
     linear-gradient(180deg, #07352e 0%, #052923 100%) !important;
 }
+
+
+/* Refined Syrian emerald / antique-gold identity — geometric mosaic, not a flat green wash */
+:root {
+  --branch-ink: #031411;
+  --branch-ink-2: #061c18;
+  --branch-emerald: #07352f;
+  --branch-emerald-2: #0a4339;
+  --branch-gold: #bca875;
+  --branch-gold-soft: #d8c894;
+  --branch-ivory: #eee8d7;
+  --branch-line: rgba(188,168,117,.17);
+}
+
+html,
+body {
+  background: var(--branch-ink) !important;
+  color: var(--branch-ivory);
+}
+
+.tech-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 48% -8%, rgba(188,168,117,.075), transparent 34rem),
+    radial-gradient(circle at 10% 38%, rgba(16,82,69,.13), transparent 38rem),
+    radial-gradient(circle at 92% 72%, rgba(16,82,69,.10), transparent 42rem),
+    linear-gradient(180deg, #071f1b 0%, #041815 52%, #031411 100%) !important;
+}
+
+/* Subtle mashrabiya / geometric mosaic inspired by the supplied visual references. */
+.tech-grid {
+  opacity: .58 !important;
+  background-image:
+    linear-gradient(180deg, rgba(3,20,17,.05), rgba(3,20,17,.58)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='112' height='112' viewBox='0 0 112 112'%3E%3Cg fill='none' stroke='%23bca875' stroke-opacity='.12' stroke-width='.75'%3E%3Cpath d='M56 3 67 24 88 14 78 35 109 56 78 77 88 98 67 88 56 109 45 88 24 98 34 77 3 56 34 35 24 14 45 24Z'/%3E%3Cpath d='M56 25 68 44 87 56 68 68 56 87 44 68 25 56 44 44Z'/%3E%3Crect x='39.5' y='39.5' width='33' height='33' transform='rotate(45 56 56)'/%3E%3Ccircle cx='56' cy='56' r='8'/%3E%3Cpath d='M0 56h25M87 56h25M56 0v25M56 87v25M16 16l21 21M75 75l21 21M96 16 75 37M37 75 16 96'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: auto, 112px 112px !important;
+  background-position: center, center top !important;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.94) 0%, rgba(0,0,0,.72) 58%, rgba(0,0,0,.22) 100%) !important;
+}
+
+.branch-header {
+  background:
+    linear-gradient(90deg, rgba(3,20,17,.96), rgba(7,34,29,.96) 52%, rgba(3,20,17,.96)) !important;
+  border-bottom-color: rgba(188,168,117,.14) !important;
+  box-shadow: 0 12px 34px rgba(0,0,0,.24), inset 0 -1px 0 rgba(188,168,117,.045);
+}
+
+.branch-user-menu {
+  border-color: rgba(188,168,117,.20) !important;
+  background:
+    radial-gradient(circle at 78% 0%, rgba(188,168,117,.09), transparent 12rem),
+    linear-gradient(180deg, rgba(8,34,29,.99), rgba(3,20,17,.99)) !important;
+  box-shadow: 0 24px 60px rgba(0,0,0,.42), inset 0 1px 0 rgba(216,200,148,.04);
+}
+
+.tech-panel {
+  border-color: rgba(188,168,117,.105) !important;
+  background:
+    linear-gradient(180deg, rgba(8,35,30,.84), rgba(4,24,21,.91)) !important;
+  box-shadow:
+    0 20px 52px rgba(0,0,0,.27),
+    inset 0 1px 0 rgba(238,232,215,.025) !important;
+}
+
+.tech-field {
+  border-color: rgba(188,168,117,.12) !important;
+  background: rgba(1,15,13,.48) !important;
+  color: var(--branch-ivory) !important;
+}
+.tech-field:focus {
+  border-color: rgba(216,200,148,.42) !important;
+  box-shadow: 0 0 0 4px rgba(188,168,117,.055), 0 0 22px rgba(188,168,117,.045) !important;
+}
+
+.tech-shell .text-cyan-300,
+.tech-shell .text-cyan-200 {
+  color: var(--branch-gold-soft) !important;
+}
+.tech-shell .bg-cyan-300 {
+  background-color: var(--branch-gold) !important;
+}
+.tech-shell .border-cyan-300\/20,
+.tech-shell .border-cyan-300\/15,
+.tech-shell .border-cyan-300\/10 {
+  border-color: rgba(188,168,117,.20) !important;
+}
+.tech-shell .bg-cyan-300\/\[0\.07\],
+.tech-shell .bg-cyan-300\/\[0\.05\],
+.tech-shell .bg-cyan-300\/\[0\.035\] {
+  background-color: rgba(188,168,117,.065) !important;
+}
+
+.nav-btn-active {
+  border-color: rgba(188,168,117,.27) !important;
+  background:
+    linear-gradient(90deg, rgba(188,168,117,.105), rgba(188,168,117,.045)) !important;
+  color: #eadfbf !important;
+  box-shadow: inset 3px 0 0 rgba(188,168,117,.60);
+}
+
+.report-action:hover,
+.topology-control:hover {
+  border-color: rgba(188,168,117,.27) !important;
+  background: rgba(188,168,117,.07) !important;
+  color: var(--branch-gold-soft) !important;
+}
+
+.topology-fullscreen {
+  background:
+    radial-gradient(circle at 50% -5%, rgba(188,168,117,.075), transparent 36rem),
+    linear-gradient(180deg, #071f1b 0%, #031411 100%) !important;
+}
+
+.topology-person-node {
+  border-color: rgba(188,168,117,.10) !important;
+  background: linear-gradient(180deg, rgba(8,35,30,.90), rgba(4,22,19,.94)) !important;
+}
+.topology-person-node:hover {
+  border-color: rgba(216,200,148,.28) !important;
+  box-shadow: 0 20px 46px rgba(0,0,0,.34), 0 0 28px rgba(188,168,117,.075) !important;
+}
+
+.gold-kicker { color: rgba(216,200,148,.72) !important; }
+.gold-action {
+  background: linear-gradient(135deg, #d7c58f, #aa915b) !important;
+  color: #05251f !important;
+  box-shadow: 0 10px 26px rgba(188,168,117,.11) !important;
+}
+
+/* Robust moving pulse used by the measured topology overlay. */
+.topology-auto-wave {
+  stroke-dasharray: 4 22;
+  animation: topology-auto-wave 2.15s linear infinite !important;
+  will-change: stroke-dashoffset;
+}
+@keyframes topology-auto-wave {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -104; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topology-auto-wave { animation-duration: 4.2s !important; }
+}
