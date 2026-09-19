@@ -42,9 +42,9 @@ export default function TopologyAutoConnectors() {
 
   useEffect(() => {
     let frame = 0;
+    let pulseFrame = 0;
     let observer: MutationObserver | null = null;
     let resizeObserver: ResizeObserver | null = null;
-    let interval = 0;
 
     const cleanupOverlay = () => {
       document.getElementById(OVERLAY_ID)?.remove();
@@ -184,7 +184,11 @@ export default function TopologyAutoConnectors() {
           wave.setAttribute("stroke-linecap", "round");
           wave.setAttribute("vector-effect", "non-scaling-stroke");
           wave.setAttribute("filter", "drop-shadow(0 0 5px rgba(188,168,117,.9))");
+          wave.setAttribute("pathLength", "100");
+          wave.setAttribute("stroke-dasharray", "2.4 13.6");
+          wave.setAttribute("stroke-dashoffset", "0");
           wave.setAttribute("class", "topology-auto-wave");
+          wave.style.animation = "none";
           svg.appendChild(wave);
 
           [0, 1].forEach((index) => {
@@ -227,17 +231,28 @@ export default function TopologyAutoConnectors() {
       frame = requestAnimationFrame(render);
     };
 
+    const animatePulse = (time: number) => {
+      const overlay = document.getElementById(OVERLAY_ID);
+      if (overlay) {
+        const offset = -((time / 24) % 100);
+        overlay.querySelectorAll<SVGPathElement>(".topology-auto-wave").forEach((wave) => {
+          wave.setAttribute("stroke-dashoffset", String(offset));
+        });
+      }
+      pulseFrame = requestAnimationFrame(animatePulse);
+    };
+
     observer = new MutationObserver(schedule);
     observer.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", schedule);
     window.addEventListener("orientationchange", schedule);
     window.addEventListener("fullscreenchange", schedule);
-    interval = window.setInterval(schedule, 1200);
     schedule();
+    pulseFrame = requestAnimationFrame(animatePulse);
 
     return () => {
       cancelAnimationFrame(frame);
-      window.clearInterval(interval);
+      cancelAnimationFrame(pulseFrame);
       observer?.disconnect();
       resizeObserver?.disconnect();
       window.removeEventListener("resize", schedule);
