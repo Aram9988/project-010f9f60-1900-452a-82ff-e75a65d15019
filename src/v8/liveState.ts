@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { STORAGE_KEY, makeSeedState, type AppState, type Assignment, type CallRequest, type Notice, type UpdateEntry } from "../v2/model";
+import { STORAGE_KEY, makeSeedState, type AppState, type Assignment, type CallRequest, type FleetVehicle, type Notice, type UpdateEntry, type VehicleMaintenanceRequest, type VehicleNeedRequest } from "../v2/model";
 import { ORG_STORAGE_KEY, loadOrgState, normalizeOrgState, saveOrgState, type OrgDepartment, type OrgOffice, type OrgRole, type OrgState, type OrgUser } from "./orgModel";
 
 const APP_CHANNEL = "rif-dimashq-command-center-app-v1";
@@ -54,8 +54,10 @@ function normalizeAppState(value: Partial<AppState> | AppState): AppState {
   const seed = makeSeedState();
   const deletedTaskIds = unionIds(value.deletedTaskIds, [...LEGACY_DEMO_WORK_IDS]);
   const deletedUpdateIds = unique(value.deletedUpdateIds);
+  const deletedVehicleIds = unique(value.deletedVehicleIds);
   const deletedTasks = new Set(deletedTaskIds);
   const deletedUpdates = new Set(deletedUpdateIds);
+  const deletedVehicles = new Set(deletedVehicleIds);
   const sourceTasks = Array.isArray(value.tasks) ? value.tasks : seed.tasks;
   const sourceNotices = Array.isArray(value.notices) ? value.notices : seed.notices;
   return {
@@ -63,8 +65,12 @@ function normalizeAppState(value: Partial<AppState> | AppState): AppState {
     tasks: sourceTasks.filter((item) => !deletedTasks.has(item.id)).map((item) => repairAssignment(item, deletedUpdates)),
     notices: sourceNotices.filter((notice) => !notice.taskId || !deletedTasks.has(notice.taskId)),
     callRequests: Array.isArray(value.callRequests) ? value.callRequests : [],
+    fleetVehicles: (Array.isArray(value.fleetVehicles) ? value.fleetVehicles : []).filter((vehicle) => !deletedVehicles.has(vehicle.id)),
+    maintenanceRequests: Array.isArray(value.maintenanceRequests) ? value.maintenanceRequests : [],
+    vehicleNeedRequests: Array.isArray(value.vehicleNeedRequests) ? value.vehicleNeedRequests : [],
     deletedTaskIds,
     deletedUpdateIds,
+    deletedVehicleIds,
   };
 }
 
@@ -88,6 +94,16 @@ function mergeCallRequests(remote: CallRequest[] = [], local: CallRequest[] = []
     if (requestResolved === previousResolved && byTime(previous.resolvedAt ?? previous.createdAt, request.resolvedAt ?? request.createdAt) <= 0) byId.set(request.id, request);
   });
   return [...byId.values()].sort((a, b) => byTime(b.createdAt, a.createdAt));
+}
+
+function mergeFleetEntities<T extends { id: string; updatedAt: string }>(remote: T[] = [], local: T[] = [], deleted = new Set<string>()) {
+  const byId = new Map<string, T>();
+  [...remote, ...local].forEach((item) => {
+    if (deleted.has(item.id)) return;
+    const previous = byId.get(item.id);
+    if (!previous || byTime(previous.updatedAt, item.updatedAt) <= 0) byId.set(item.id, item);
+  });
+  return [...byId.values()].sort((a, b) => byTime(b.updatedAt, a.updatedAt));
 }
 
 function updateVersion(update: UpdateEntry) { return update.editedAt ?? update.at; }
@@ -132,16 +148,22 @@ function mergeAppForSync(remoteValue: Partial<AppState> | AppState, localValue: 
   const local = normalizeAppState(localValue);
   const deletedTaskIds = unionIds(remote.deletedTaskIds, local.deletedTaskIds, [...LEGACY_DEMO_WORK_IDS]);
   const deletedUpdateIds = unionIds(remote.deletedUpdateIds, local.deletedUpdateIds);
+  const deletedVehicleIds = unionIds(remote.deletedVehicleIds, local.deletedVehicleIds);
   const deletedTasks = new Set(deletedTaskIds);
   const deletedUpdates = new Set(deletedUpdateIds);
+  const deletedVehicles = new Set(deletedVehicleIds);
   return {
     ...remote,
     currentUserId: local.currentUserId || remote.currentUserId,
     tasks: mergeAssignments(remote.tasks, local.tasks, deletedTasks, deletedUpdates),
     notices: mergeNotices(remote.notices, local.notices).filter((notice) => !notice.taskId || !deletedTasks.has(notice.taskId)),
     callRequests: mergeCallRequests(remote.callRequests ?? [], local.callRequests ?? []),
+    fleetVehicles: mergeFleetEntities<FleetVehicle>(remote.fleetVehicles ?? [], local.fleetVehicles ?? [], deletedVehicles),
+    maintenanceRequests: mergeFleetEntities<VehicleMaintenanceRequest>(remote.maintenanceRequests ?? [], local.maintenanceRequests ?? []),
+    vehicleNeedRequests: mergeFleetEntities<VehicleNeedRequest>(remote.vehicleNeedRequests ?? [], local.vehicleNeedRequests ?? []),
     deletedTaskIds,
     deletedUpdateIds,
+    deletedVehicleIds,
   };
 }
 
@@ -264,6 +286,7 @@ export function isWorkspaceSyncConfigured() { return Boolean(syncKey()); }
 
 function detectAppDeletions(before: AppState, after: AppState): AppState {
   const removedTasks = before.tasks.filter((item) => !after.tasks.some((candidate) => candidate.id === item.id)).map((item) => item.id);
+  const removedVehicles = (before.fleetVehicles ?? []).filter((item) => !(after.fleetVehicles ?? []).some((candidate) => candidate.id === item.id)).map((item) => item.id);
   const removedUpdates: string[] = [];
   before.tasks.forEach((item) => {
     const nextItem = after.tasks.find((candidate) => candidate.id === item.id);
@@ -274,6 +297,7 @@ function detectAppDeletions(before: AppState, after: AppState): AppState {
     ...after,
     deletedTaskIds: unionIds(before.deletedTaskIds, after.deletedTaskIds, removedTasks),
     deletedUpdateIds: unionIds(before.deletedUpdateIds, after.deletedUpdateIds, removedUpdates),
+    deletedVehicleIds: unionIds(before.deletedVehicleIds, after.deletedVehicleIds, removedVehicles),
   });
 }
 
