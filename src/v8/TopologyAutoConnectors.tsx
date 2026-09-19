@@ -40,11 +40,24 @@ export default function TopologyAutoConnectors() {
   const [org] = useLiveOrgState();
   const [app] = useLiveAppState();
 
+  // Live workspace polling can return new object/array identities even when the tree itself did
+  // not change. Depending directly on org/app.tasks therefore restarted every pulse animation.
+  // These signatures only change when the hierarchy/layout or active routing actually changes.
+  const hierarchySignature = org.users
+    .map((user) => [user.id, user.managerId ?? "", user.active ? "1" : "0", user.roleId, user.name, user.title ?? ""].join(":"))
+    .sort()
+    .join("|");
+  const activeSignature = app.tasks
+    .map((item) => [item.id, item.status, item.assigneeId ?? "", item.ownerId ?? "", item.archivedAt ?? ""].join(":"))
+    .sort()
+    .join("|");
+
   useEffect(() => {
     let frame = 0;
     let pulseFrame = 0;
     let observer: MutationObserver | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let animatedPulses: Array<{ path: SVGPathElement; dot: SVGCircleElement; phase: number }> = [];
 
     const cleanupOverlay = () => {
       document.getElementById(OVERLAY_ID)?.remove();
@@ -54,6 +67,7 @@ export default function TopologyAutoConnectors() {
     const render = () => {
       observer?.disconnect();
       resizeObserver?.disconnect();
+      animatedPulses = [];
       document.getElementById(OVERLAY_ID)?.remove();
 
       const viewport = document.querySelector<HTMLElement>(".topology-scroll");
@@ -188,22 +202,21 @@ export default function TopologyAutoConnectors() {
           wave.setAttribute("stroke-dasharray", "2.4 13.6");
           wave.setAttribute("stroke-dashoffset", "0");
           wave.setAttribute("class", "topology-auto-wave");
-          wave.style.animation = "none";
+          // Disable stylesheet/SMIL timing for this path. JavaScript drives the phase from
+          // performance.now(), so a sync refresh cannot restart the pulse at zero.
+          wave.style.setProperty("animation", "none", "important");
           svg.appendChild(wave);
 
-          [0, 1].forEach((index) => {
+          [0, 0.5].forEach((phase, index) => {
             const dot = svgEl("circle");
-            dot.setAttribute("r", index === 0 ? "3" : "2");
-            dot.setAttribute("fill", index === 0 ? "rgba(224,205,153,.98)" : "rgba(52,211,153,.96)");
-            dot.setAttribute("filter", "drop-shadow(0 0 6px rgba(199,178,122,.95))");
-            const motion = svgEl("animateMotion");
-            motion.setAttribute("path", d);
-            motion.setAttribute("dur", "4.8s");
-            motion.setAttribute("begin", index === 0 ? "0s" : "-2.4s");
-            motion.setAttribute("repeatCount", "indefinite");
-            motion.setAttribute("rotate", "auto");
-            dot.appendChild(motion);
+            dot.setAttribute("r", index === 0 ? "3.8" : "2.5");
+            dot.setAttribute("fill", index === 0 ? "rgba(235,218,167,.99)" : "rgba(138,190,180,.98)");
+            dot.setAttribute("stroke", "rgba(255,248,220,.55)");
+            dot.setAttribute("stroke-width", "0.7");
+            dot.setAttribute("filter", "drop-shadow(0 0 7px rgba(199,178,122,.95))");
+            dot.style.pointerEvents = "none";
             svg.appendChild(dot);
+            animatedPulses.push({ path: wave, dot, phase });
           });
         }
 
@@ -234,10 +247,27 @@ export default function TopologyAutoConnectors() {
     const animatePulse = (time: number) => {
       const overlay = document.getElementById(OVERLAY_ID);
       if (overlay) {
-        const offset = -((time / 24) % 100);
+        // Use an absolute clock rather than an animation start time. This means even if React
+        // redraws the connector layer after a layout change, the wave continues from the same
+        // phase instead of looking frozen at the beginning.
+        const normalized = (time / 36) % 100;
         overlay.querySelectorAll<SVGPathElement>(".topology-auto-wave").forEach((wave) => {
-          wave.setAttribute("stroke-dashoffset", String(offset));
+          wave.style.setProperty("stroke-dashoffset", String(-normalized), "important");
         });
+
+        const travel = 3600;
+        for (const pulse of animatedPulses) {
+          try {
+            const length = pulse.path.getTotalLength();
+            if (!Number.isFinite(length) || length <= 0) continue;
+            const progress = ((time / travel) + pulse.phase) % 1;
+            const point = pulse.path.getPointAtLength(length * progress);
+            pulse.dot.setAttribute("cx", String(point.x));
+            pulse.dot.setAttribute("cy", String(point.y));
+          } catch {
+            // The path may have been replaced during a resize frame; the next render repopulates it.
+          }
+        }
       }
       pulseFrame = requestAnimationFrame(animatePulse);
     };
@@ -260,7 +290,7 @@ export default function TopologyAutoConnectors() {
       window.removeEventListener("fullscreenchange", schedule);
       cleanupOverlay();
     };
-  }, [org, app.tasks]);
+  }, [hierarchySignature, activeSignature]);
 
   return null;
 }
