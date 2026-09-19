@@ -154,6 +154,8 @@ export type AppState = {
   deletedTaskIds?: string[];
   deletedUpdateIds?: string[];
   deletedVehicleIds?: string[];
+  deletedMaintenanceRequestIds?: string[];
+  deletedVehicleNeedRequestIds?: string[];
 };
 
 // Legacy exports are kept only for compatibility with older components.
@@ -173,6 +175,8 @@ export function makeSeedState(): AppState {
     deletedTaskIds: [],
     deletedUpdateIds: [],
     deletedVehicleIds: [],
+    deletedMaintenanceRequestIds: [],
+    deletedVehicleNeedRequestIds: [],
   };
 }
 
