@@ -6,6 +6,66 @@ export type WorkType = "project" | "task";
 export type ProjectPhase = "study" | "execution";
 export type MinistryApprovalState = "not_required" | "waiting" | "approved";
 
+export type FleetVehicleStatus = "available" | "assigned" | "maintenance" | "out_of_service";
+export type MaintenanceRequestStatus = "requested" | "scheduled" | "in_maintenance" | "completed" | "rejected";
+export type VehicleNeedStatus = "requested" | "approved" | "partial" | "rejected" | "completed";
+
+export type FleetVehicle = {
+  id: string;
+  plateNumber: string;
+  make: string;
+  model: string;
+  type?: string;
+  year?: string;
+  color?: string;
+  fuelCard: boolean;
+  fuelCardNumber?: string;
+  status: FleetVehicleStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VehicleMaintenanceRequest = {
+  id: string;
+  requesterId: string;
+  departmentId?: string;
+  vehicleId: string;
+  vehicleLabel: string;
+  reason: string;
+  requestedAt: string;
+  updatedAt: string;
+  status: MaintenanceRequestStatus;
+  scheduledDate?: string;
+  replacementVehicleId?: string;
+  replacementVehicleLabel?: string;
+  vehiclesReply?: string;
+  completedAt?: string;
+};
+
+export type VehicleNeedLine = {
+  id: string;
+  destination: string;
+  userName: string;
+  purpose?: string;
+};
+
+export type VehicleNeedRequest = {
+  id: string;
+  requesterId: string;
+  departmentId?: string;
+  neededDate: string;
+  quantity: number;
+  lines: VehicleNeedLine[];
+  requestedAt: string;
+  updatedAt: string;
+  status: VehicleNeedStatus;
+  approvedVehicleIds?: string[];
+  approvedVehicleLabels?: string[];
+  vehiclesReply?: string;
+  completedAt?: string;
+};
+
 export type DemoUser = {
   id: string;
   name: string;
@@ -87,9 +147,13 @@ export type AppState = {
   tasks: Assignment[];
   notices: Notice[];
   callRequests?: CallRequest[];
+  fleetVehicles?: FleetVehicle[];
+  maintenanceRequests?: VehicleMaintenanceRequest[];
+  vehicleNeedRequests?: VehicleNeedRequest[];
   currentUserId: string;
   deletedTaskIds?: string[];
   deletedUpdateIds?: string[];
+  deletedVehicleIds?: string[];
 };
 
 // Legacy exports are kept only for compatibility with older components.
@@ -103,8 +167,12 @@ export function makeSeedState(): AppState {
     currentUserId: "",
     callRequests: [],
     notices: [],
+    fleetVehicles: [],
+    maintenanceRequests: [],
+    vehicleNeedRequests: [],
     deletedTaskIds: [],
     deletedUpdateIds: [],
+    deletedVehicleIds: [],
   };
 }
 
