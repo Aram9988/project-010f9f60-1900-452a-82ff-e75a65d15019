@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Download, KeyRound, ShieldCheck, UserRound, X } from "lucide-react";
+import { Camera, Download, KeyRound, UserRound, X } from "lucide-react";
 import { SYSTEM_ADMIN_ID, roleOf } from "./orgModel";
 import { useLiveOrgState } from "./liveState";
 
