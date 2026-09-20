@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { AppState, Assignment, Notice } from "../v2/model";
 import { useLiveAppState, WORKSPACE_SYNC_KEY_STORAGE } from "./liveState";
+import { SYNC_ENDPOINT } from "./syncConfig";
 
-const SYNC_ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
 
 type Snapshot = { tasks: Map<string, string>; notices: Set<string> };
 

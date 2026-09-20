@@ -1,3 +1,5 @@
+import { SYNC_ENDPOINT } from "./syncConfig";
+
 export type SyncedReminder = {
   id: string;
   text: string;
@@ -38,7 +40,6 @@ type RemoteSnapshot = {
   revision?: number;
 };
 
-const SYNC_ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
 const WORKSPACE_SYNC_KEY_STORAGE = "rif-dimashq-workspace-sync-key-v1";
 
 export const emptyPrivateWorkspace = (): PrivateWorkspaceState => ({

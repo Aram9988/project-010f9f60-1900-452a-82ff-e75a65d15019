@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { STORAGE_KEY, makeSeedState, type AppState, type Assignment, type CallRequest, type FleetVehicle, type Notice, type UpdateEntry, type VehicleMaintenanceRequest, type VehicleNeedRequest } from "../v2/model";
 import { ORG_STORAGE_KEY, loadOrgState, normalizeOrgState, saveOrgState, type OrgDepartment, type OrgOffice, type OrgRole, type OrgState, type OrgUser } from "./orgModel";
+import { SYNC_ENDPOINT } from "./syncConfig";
 
 const APP_CHANNEL = "rif-dimashq-command-center-app-v1";
 const ORG_CHANNEL = "rif-dimashq-command-center-org-v1";
 const CALL_STORAGE_KEY = "rif-dimashq-call-requests-v1";
 export const WORKSPACE_SYNC_KEY_STORAGE = "rif-dimashq-workspace-sync-key-v1";
-const SYNC_ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
 const POLL_MS = 1500;
 
 // These IDs existed only in the original public demo. They are permanently tombstoned.

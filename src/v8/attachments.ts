@@ -1,7 +1,7 @@
 import type { AttachmentRef } from "../v2/model";
 import { WORKSPACE_SYNC_KEY_STORAGE } from "./liveState";
+import { SYNC_ENDPOINT as ENDPOINT } from "./syncConfig";
 
-const ENDPOINT = "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Rf0WyT-WkcYbytquLvqcMw_1kZ0QMiD";
 const ATTACHMENT_PREFIX = "__workspace_attachment_v1__:";
 const TUS_VERSION = "1.0.0";
