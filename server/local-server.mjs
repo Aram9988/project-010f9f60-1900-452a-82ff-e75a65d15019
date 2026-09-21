@@ -16,7 +16,10 @@ const UPSTREAM_IMPORT_MARKER = path.join(DATA_DIR, "upstream-imported.json");
 const PORT = Number(process.env.PORT || 8080);
 const EXPECTED_HASH = process.env.WORKSPACE_KEY_HASH || "ec46eb36bb7e5a949866c89c1df8fd2bda7546511b21106c0bf8c82a1a0a10b0";
 const UPSTREAM_SYNC_ENDPOINT = (process.env.UPSTREAM_SYNC_ENDPOINT || "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync").replace(/\/+$/, "");
+const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 let attachmentMigrationPromise = null;
+let telegramBotUsername = "";
+let telegramPolling = false;
 
 fs.mkdirSync(ATTACH_DIR, { recursive: true });
 const db = new DatabaseSync(DB_PATH);
@@ -25,6 +28,25 @@ db.exec(`create table if not exists shared_snapshot (
   payload text not null,
   revision integer not null default 0,
   updated_at text not null
+);
+create table if not exists telegram_links (
+  user_id text primary key,
+  chat_id text not null unique,
+  telegram_username text,
+  linked_at text not null
+);
+create table if not exists telegram_link_codes (
+  code text primary key,
+  user_id text not null,
+  expires_at integer not null
+);
+create table if not exists telegram_state (
+  key text primary key,
+  value text not null
+);
+create table if not exists telegram_sent (
+  notice_id text primary key,
+  sent_at text not null
 )`);
 
 function seedIfNeeded() {
@@ -68,15 +90,143 @@ function currentRow() {
   const row = db.prepare("select payload,revision,updated_at from shared_snapshot where id=?").get("main");
   return { payload: JSON.parse(row.payload), revision: Number(row.revision), updated_at: row.updated_at };
 }
-function writeRow(payload, revision) {
+function writeRow(payload, revision, notifyTelegram = true) {
+  const previous = currentRow().payload;
   const updatedAt = new Date().toISOString();
   db.prepare("update shared_snapshot set payload=?, revision=?, updated_at=? where id=?")
     .run(JSON.stringify(payload), revision, updatedAt, "main");
+  if (notifyTelegram) void dispatchTelegramNotices(previous, payload);
   return { payload, revision, updated_at: updatedAt };
 }
 function arrayOf(value) { return Array.isArray(value) ? value.filter((x)=>x && typeof x === "object") : []; }
 function byId(items) { const m=new Map(); for(const x of items){ if(typeof x.id==="string" && x.id) m.set(x.id,x); } return m; }
 function timeOf(v){ return typeof v==="string" ? v : ""; }
+
+async function telegramApi(method, body = {}) {
+  if (!TELEGRAM_BOT_TOKEN) throw new Error("telegram_not_configured");
+  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(method === "getUpdates" ? 35_000 : 12_000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data?.ok === false) throw new Error(`telegram_${method}_failed`);
+  return data.result;
+}
+async function ensureTelegramIdentity() {
+  if (!TELEGRAM_BOT_TOKEN) return "";
+  if (telegramBotUsername) return telegramBotUsername;
+  const me = await telegramApi("getMe");
+  telegramBotUsername = String(me?.username || "");
+  return telegramBotUsername;
+}
+function telegramUserExists(userId) {
+  if (userId === "__system-administrator__") return true;
+  return arrayOf(currentRow().payload?.org?.users).some((user) => user.id === userId && user.active !== false);
+}
+async function sendTelegram(chatId, text) {
+  await telegramApi("sendMessage", { chat_id: chatId, text, disable_web_page_preview: true });
+}
+async function dispatchTelegramNotices(previousPayload, nextPayload) {
+  if (!TELEGRAM_BOT_TOKEN) return;
+  const before = new Set(arrayOf(previousPayload?.app?.notices).map((notice) => notice.id).filter(Boolean));
+  const added = arrayOf(nextPayload?.app?.notices).filter((notice) => notice.id && !before.has(notice.id));
+  for (const notice of added) {
+    if (!notice.userId || !notice.text) continue;
+    if (db.prepare("select 1 from telegram_sent where notice_id=?").get(notice.id)) continue;
+    const link = db.prepare("select chat_id from telegram_links where user_id=?").get(notice.userId);
+    if (!link?.chat_id) continue;
+    try {
+      await sendTelegram(link.chat_id, `إشعار جديد — فرع اتصالات ريف دمشق\n\n${notice.text}`);
+      db.prepare("insert or ignore into telegram_sent(notice_id,sent_at) values(?,?)").run(notice.id, new Date().toISOString());
+    } catch (error) { console.error("telegram notification failed", notice.id, error); }
+  }
+}
+async function handleTelegramUpdate(update) {
+  const message = update?.message;
+  const chatId = message?.chat?.id;
+  if (!chatId) return;
+  const text = String(message?.text || "").trim();
+  if (!text.startsWith("/start")) return;
+  const code = text.split(/\s+/)[1]?.toUpperCase() || "";
+  if (!code) {
+    await sendTelegram(chatId, "افتح «حسابي» في موقع فرع اتصالات ريف دمشق واضغط «ربط تيليغرام»، ثم افتح رابط البوت من هناك.");
+    return;
+  }
+  const row = db.prepare("select user_id,expires_at from telegram_link_codes where code=?").get(code);
+  if (!row || Number(row.expires_at) < Date.now() || !telegramUserExists(row.user_id)) {
+    db.prepare("delete from telegram_link_codes where code=?").run(code);
+    await sendTelegram(chatId, "رمز الربط غير صالح أو انتهت صلاحيته. أنشئ رمزاً جديداً من الموقع.");
+    return;
+  }
+  const username = String(message?.from?.username || "");
+  const at = new Date().toISOString();
+  db.prepare(`insert into telegram_links(user_id,chat_id,telegram_username,linked_at)
+    values(?,?,?,?)
+    on conflict(user_id) do update set chat_id=excluded.chat_id,telegram_username=excluded.telegram_username,linked_at=excluded.linked_at`)
+    .run(row.user_id, String(chatId), username, at);
+  db.prepare("delete from telegram_link_codes where user_id=?").run(row.user_id);
+  await sendTelegram(chatId, "تم ربط حسابك بنجاح. ستصلك إشعارات العمل المهمة من النظام هنا.");
+}
+async function telegramPollLoop() {
+  if (!TELEGRAM_BOT_TOKEN || telegramPolling) return;
+  telegramPolling = true;
+  try {
+    await ensureTelegramIdentity();
+    while (telegramPolling) {
+      const saved = db.prepare("select value from telegram_state where key='update_offset'").get();
+      const offset = Number(saved?.value || 0);
+      try {
+        const updates = await telegramApi("getUpdates", { offset, timeout: 25, allowed_updates: ["message"] });
+        for (const update of Array.isArray(updates) ? updates : []) {
+          await handleTelegramUpdate(update);
+          const next = Number(update.update_id) + 1;
+          db.prepare(`insert into telegram_state(key,value) values('update_offset',?)
+            on conflict(key) do update set value=excluded.value`).run(String(next));
+        }
+      } catch (error) {
+        console.error("telegram polling error", error);
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
+  } finally { telegramPolling = false; }
+}
+async function handleTelegramApi(req, res, url) {
+  if (req.method === "OPTIONS") { res.writeHead(204, cors()); return res.end(); }
+  if (!authorized(req)) return sendJson(res, { error: "unauthorized" }, 401);
+  const configured = Boolean(TELEGRAM_BOT_TOKEN);
+  const userIdFromQuery = url.searchParams.get("userId") || "";
+  if (url.pathname === "/api/telegram/status" && req.method === "GET") {
+    const userId = userIdFromQuery;
+    if (!telegramUserExists(userId)) return sendJson(res, { error: "user_not_found" }, 404);
+    if (configured && !telegramBotUsername) { try { await ensureTelegramIdentity(); } catch {} }
+    const link = db.prepare("select telegram_username,linked_at from telegram_links where user_id=?").get(userId);
+    return sendJson(res, { configured, linked: Boolean(link), botUsername: telegramBotUsername || undefined, telegramUsername: link?.telegram_username || undefined, linkedAt: link?.linked_at || undefined });
+  }
+  if (url.pathname === "/api/telegram/link" && req.method === "POST") {
+    if (!configured) return sendJson(res, { configured: false, error: "telegram_not_configured" }, 503);
+    const body = await readJsonBody(req);
+    const userId = String(body?.userId || "");
+    if (!telegramUserExists(userId)) return sendJson(res, { error: "user_not_found" }, 404);
+    const username = await ensureTelegramIdentity();
+    if (!username) return sendJson(res, { error: "bot_identity_unavailable" }, 503);
+    db.prepare("delete from telegram_link_codes where user_id=? or expires_at<?").run(userId, Date.now());
+    const code = crypto.randomBytes(6).toString("hex").toUpperCase();
+    const expiresAt = Date.now() + 15 * 60_000;
+    db.prepare("insert into telegram_link_codes(code,user_id,expires_at) values(?,?,?)").run(code, userId, expiresAt);
+    return sendJson(res, { configured: true, code, expiresAt: new Date(expiresAt).toISOString(), url: `https://t.me/${username}?start=${code}` });
+  }
+  if (url.pathname === "/api/telegram/link" && req.method === "DELETE") {
+    const userId = userIdFromQuery;
+    if (!telegramUserExists(userId)) return sendJson(res, { error: "user_not_found" }, 404);
+    db.prepare("delete from telegram_links where user_id=?").run(userId);
+    db.prepare("delete from telegram_link_codes where user_id=?").run(userId);
+    return sendJson(res, { ok: true });
+  }
+  return sendJson(res, { error: "method_not_allowed" }, 405);
+}
+
 function mergeUpdates(a,b){
   const m=new Map();
   for(const u of [...arrayOf(a),...arrayOf(b)]){
@@ -159,7 +309,7 @@ async function importUpstreamSnapshotOnce(key){
     const upstream=await response.json();
     if(!upstream?.payload || !Number.isFinite(Number(upstream.revision))) return {imported:false,reason:"invalid_upstream"};
     const current=currentRow();
-    if(Number(upstream.revision)>=Number(current.revision)) writeRow(upstream.payload,Number(upstream.revision));
+    if(Number(upstream.revision)>=Number(current.revision)) writeRow(upstream.payload,Number(upstream.revision),false);
     const marker={at:new Date().toISOString(),upstreamRevision:Number(upstream.revision),localRevision:currentRow().revision};
     fs.writeFileSync(UPSTREAM_IMPORT_MARKER,JSON.stringify(marker,null,2),{mode:0o600});
     console.log("upstream snapshot import complete",marker);
@@ -243,12 +393,16 @@ function serveStatic(req,res,url){
 const server=http.createServer(async(req,res)=>{
   try{
     const url=new URL(req.url||"/","http://localhost");
-    if(url.pathname==="/health") return sendJson(res,{ok:true,service:"operations-app",time:new Date().toISOString()});
+    if(url.pathname==="/health") return sendJson(res,{ok:true,service:"operations-app",telegramConfigured:Boolean(TELEGRAM_BOT_TOKEN),time:new Date().toISOString()});
     if(url.pathname==="/api/workspace-sync") return await handleApi(req,res,url);
+    if(url.pathname.startsWith("/api/telegram/")) return await handleTelegramApi(req,res,url);
     return serveStatic(req,res,url);
   }catch(error){
     console.error(error);
     if(!res.headersSent) sendJson(res,{error:"internal_error"},500); else res.end();
   }
 });
-server.listen(PORT,"0.0.0.0",()=>console.log(`operations-app listening on 0.0.0.0:${PORT}`));
+server.listen(PORT,"0.0.0.0",()=>{
+  console.log(`operations-app listening on 0.0.0.0:${PORT}`);
+  if (TELEGRAM_BOT_TOKEN) void telegramPollLoop();
+});

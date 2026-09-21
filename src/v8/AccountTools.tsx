@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Download, KeyRound, UserRound, X } from "lucide-react";
+import { Camera, Download, KeyRound, Link2, RefreshCcw, Send, Unlink, UserRound, X } from "lucide-react";
 import { SYSTEM_ADMIN_ID, roleOf } from "./orgModel";
-import { useLiveOrgState } from "./liveState";
+import { useLiveOrgState, WORKSPACE_SYNC_KEY_STORAGE } from "./liveState";
+import { IS_LOCAL_DEPLOYMENT } from "./syncConfig";
 
 const SESSION_KEY = "command-center-demo-session";
+
+type TelegramStatus = {
+  configured: boolean;
+  linked: boolean;
+  botUsername?: string;
+  telegramUsername?: string;
+  linkedAt?: string;
+};
 
 async function resizeAvatar(file: File) {
   const url = URL.createObjectURL(file);
@@ -36,6 +45,9 @@ export default function AccountTools() {
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [telegramStatus, setTelegramStatus] = useState<TelegramStatus | null>(null);
+  const [telegramLinkCode, setTelegramLinkCode] = useState("");
+  const [telegramBusy, setTelegramBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -51,9 +63,65 @@ export default function AccountTools() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!IS_LOCAL_DEPLOYMENT || !open || !sessionUserId) return;
+    void loadTelegramStatus();
+    const timer = telegramLinkCode ? window.setInterval(() => void loadTelegramStatus(), 2500) : 0;
+    return () => { if (timer) window.clearInterval(timer); };
+  }, [open, sessionUserId, telegramLinkCode]);
+
   const user = useMemo(() => sessionUserId && sessionUserId !== SYSTEM_ADMIN_ID ? org.users.find((item) => item.id === sessionUserId && item.active) : undefined, [org.users, sessionUserId]);
   const isAdmin = sessionUserId === SYSTEM_ADMIN_ID;
   if (!sessionUserId) return null;
+
+  function telegramHeaders(json = false) {
+    const key = localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? "";
+    return json ? { "Content-Type": "application/json", "x-workspace-key": key } : { "x-workspace-key": key };
+  }
+
+  async function loadTelegramStatus() {
+    if (!IS_LOCAL_DEPLOYMENT || !sessionUserId) return;
+    try {
+      const res = await fetch(`/api/telegram/status?userId=${encodeURIComponent(sessionUserId)}`, { cache: "no-store", headers: telegramHeaders() });
+      if (!res.ok) return;
+      const status = await res.json() as TelegramStatus;
+      setTelegramStatus(status);
+      if (status.linked) setTelegramLinkCode("");
+    } catch { /* Local notification service may be restarting. */ }
+  }
+
+  async function linkTelegram() {
+    if (!sessionUserId) return;
+    setTelegramBusy(true);
+    try {
+      const res = await fetch("/api/telegram/link", {
+        method: "POST",
+        headers: telegramHeaders(true),
+        body: JSON.stringify({ userId: sessionUserId }),
+      });
+      const data = await res.json() as { configured?: boolean; url?: string; code?: string; error?: string };
+      if (!res.ok || !data.url || !data.code) {
+        setMessage(data.configured === false ? "خدمة تيليغرام جاهزة في الموقع ولكن يجب إعداد البوت من قبل المدير أولاً." : "تعذر إنشاء رابط تيليغرام حالياً.");
+        return;
+      }
+      setTelegramLinkCode(data.code);
+      window.open(data.url, "_blank", "noopener,noreferrer");
+      setMessage("تم فتح البوت. اضغط Start في تيليغرام لإكمال الربط، وسيتم التحقق تلقائياً.");
+    } finally { setTelegramBusy(false); }
+  }
+
+  async function unlinkTelegram() {
+    if (!sessionUserId || !window.confirm("إلغاء ربط تيليغرام لهذا الحساب؟")) return;
+    setTelegramBusy(true);
+    try {
+      const res = await fetch(`/api/telegram/link?userId=${encodeURIComponent(sessionUserId)}`, { method: "DELETE", headers: telegramHeaders() });
+      if (res.ok) {
+        setTelegramStatus((value) => value ? { ...value, linked: false, telegramUsername: undefined, linkedAt: undefined } : value);
+        setTelegramLinkCode("");
+        setMessage("تم إلغاء ربط تيليغرام.");
+      }
+    } finally { setTelegramBusy(false); }
+  }
 
   async function chooseAvatar(file?: File) {
     if (!user || !file) return;
@@ -99,6 +167,24 @@ export default function AccountTools() {
     URL.revokeObjectURL(url);
   }
 
+  const telegramPanel = IS_LOCAL_DEPLOYMENT ? <div className="mt-7 border-t border-white/8 pt-6">
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 text-xs font-black"><Send size={15} className="text-[#c7b27a]" />إشعارات تيليغرام</div>
+      {telegramStatus?.linked && <span className="rounded-full border border-emerald-300/15 bg-emerald-300/5 px-2 py-1 text-[9px] font-black text-emerald-300">مرتبط</span>}
+    </div>
+    {telegramStatus?.configured === false ? <p className="text-[10px] leading-5 text-slate-500">البوت غير مفعّل على الخادم بعد. بعد إدخال Bot Token سيصبح الربط متاحاً مباشرة.</p> : telegramStatus?.linked ? <>
+      <p className="text-[10px] leading-5 text-slate-400">سيتم إرسال إشعارات المهام والمشاريع وطلبات الاتصال إلى تيليغرام تلقائياً{telegramStatus.telegramUsername ? ` — @${telegramStatus.telegramUsername}` : ""}.</p>
+      <button type="button" disabled={telegramBusy} onClick={() => void unlinkTelegram()} className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-rose-300/15 px-3 text-[10px] font-black text-rose-300 disabled:opacity-40"><Unlink size={13} />إلغاء الربط</button>
+    </> : <>
+      <p className="text-[10px] leading-5 text-slate-500">اربط حسابك مرة واحدة فقط. لا يحتاج الخادم إلى اتصال وارد من الإنترنت؛ يتصل هو بواجهة Telegram Bot API فقط.</p>
+      <div className="mt-3 flex gap-2">
+        <button type="button" disabled={telegramBusy || telegramStatus?.configured === false} onClick={() => void linkTelegram()} className="gold-action flex h-10 flex-1 items-center justify-center gap-2 rounded-xl text-[10px] font-black disabled:opacity-35"><Link2 size={13} />ربط تيليغرام</button>
+        <button type="button" disabled={telegramBusy} onClick={() => void loadTelegramStatus()} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-400"><RefreshCcw size={13} /></button>
+      </div>
+      {telegramLinkCode && <div className="mt-3 rounded-xl border border-[#c7b27a]/15 bg-[#c7b27a]/5 p-3 text-center"><div className="text-[9px] text-slate-500">رمز الربط المؤقت</div><div className="mt-1 font-mono text-base font-black tracking-[0.2em] text-[#e0cd99]">{telegramLinkCode}</div></div>}
+    </>}
+  </div> : null;
+
   return <>
     {open && <div className="fixed inset-0 z-[180] grid place-items-center overflow-y-auto bg-black/75 p-4 backdrop-blur-lg">
       <div className="tech-panel relative my-8 w-full max-w-lg p-6">
@@ -108,6 +194,7 @@ export default function AccountTools() {
           <h2 className="mt-2 text-xl font-black">تصدير بيانات المستخدمين</h2>
           <p className="mt-2 text-xs leading-6 text-slate-400">تنزيل ملف CSV يحتوي أسماء المستخدمين، أسماء الدخول، كلمات المرور الحالية، الدور والقسم والمكتب والمسؤول المباشر. هذه الأداة متاحة للمدير فقط.</p>
           <button type="button" onClick={exportCredentials} className="gold-action mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl font-black"><Download size={16} />تصدير بيانات المستخدمين</button>
+          {telegramPanel}
         </> : user ? <>
           <div className="gold-kicker">MY PROFILE</div>
           <h2 className="mt-2 text-xl font-black">الملف الشخصي</h2>
@@ -120,6 +207,7 @@ export default function AccountTools() {
             <div className="space-y-3"><input className="tech-field" type="password" placeholder="كلمة المرور الجديدة" value={nextPassword} onChange={(e) => setNextPassword(e.target.value)} /><input className="tech-field" type="password" placeholder="تأكيد كلمة المرور" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} /></div>
             <button type="button" onClick={changePassword} className="gold-action mt-4 h-11 w-full rounded-xl font-black">حفظ كلمة المرور</button>
           </div>
+          {telegramPanel}
           {message && <div className="mt-4 rounded-xl border border-[#c7b27a]/15 bg-[#c7b27a]/6 p-3 text-[10px] font-bold text-[#e0cd99]">{message}</div>}
         </> : null}
       </div>
