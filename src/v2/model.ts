@@ -128,6 +128,7 @@ export type Assignment = {
 export type Notice = {
   id: string;
   userId: string;
+  fromUserId?: string;
   taskId?: string;
   text: string;
   at: string;
