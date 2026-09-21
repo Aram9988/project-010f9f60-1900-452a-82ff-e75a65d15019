@@ -138,7 +138,11 @@ async function dispatchTelegramNotices(previousPayload, nextPayload) {
     const link = db.prepare("select chat_id from telegram_links where user_id=?").get(notice.userId);
     if (!link?.chat_id) continue;
     try {
-      await sendTelegram(link.chat_id, `إشعار جديد — فرع اتصالات ريف دمشق\n\n${notice.text}`);
+      const orgUsers = arrayOf(nextPayload?.org?.users);
+      const senderName = notice.fromUserId === "__system-administrator__"
+        ? "Administrator"
+        : orgUsers.find((user) => user.id === notice.fromUserId)?.name || "النظام";
+      await sendTelegram(link.chat_id, `إشعار جديد — فرع اتصالات ريف دمشق\nمن: ${senderName}\n\n${notice.text}`);
       db.prepare("insert or ignore into telegram_sent(notice_id,sent_at) values(?,?)").run(notice.id, new Date().toISOString());
     } catch (error) { console.error("telegram notification failed", notice.id, error); }
   }
