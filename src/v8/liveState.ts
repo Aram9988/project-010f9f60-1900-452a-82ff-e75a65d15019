@@ -243,8 +243,8 @@ function mergeTreeCallsIntoApp(appValue: AppState): AppState {
   const newNotices: Notice[] = [];
   treeCalls.forEach((call) => {
     const existing = existingById.get(call.id);
-    if (!existing) newNotices.push({ id: `notice-${call.id}`, userId: call.toUserId, text: "لديك طلب اتصال جديد.", at: call.createdAt, read: false });
-    else if (existing.active && call.active === false) newNotices.push({ id: `notice-resolved-${call.id}`, userId: call.fromUserId, text: "تم إنهاء طلب الاتصال.", at: new Date().toISOString(), read: false });
+    if (!existing) newNotices.push({ id: `notice-${call.id}`, userId: call.toUserId, fromUserId: call.fromUserId, text: "لديك طلب اتصال جديد.", at: call.createdAt, read: false });
+    else if (existing.active && call.active === false) newNotices.push({ id: `notice-resolved-${call.id}`, userId: call.fromUserId, fromUserId: call.toUserId, text: "تم إنهاء طلب الاتصال.", at: new Date().toISOString(), read: false });
   });
   return { ...appValue, callRequests: mergeCallRequests(appValue.callRequests ?? [], treeCalls), notices: mergeNotices(appValue.notices, newNotices) };
 }
