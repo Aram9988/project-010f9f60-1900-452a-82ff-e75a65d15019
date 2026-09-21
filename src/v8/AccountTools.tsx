@@ -74,9 +74,11 @@ export default function AccountTools() {
   const isAdmin = sessionUserId === SYSTEM_ADMIN_ID;
   if (!sessionUserId) return null;
 
-  function telegramHeaders(json = false) {
+  function telegramHeaders(json = false): Record<string, string> {
     const key = localStorage.getItem(WORKSPACE_SYNC_KEY_STORAGE) ?? "";
-    return json ? { "Content-Type": "application/json", "x-workspace-key": key } : { "x-workspace-key": key };
+    const headers: Record<string, string> = { "x-workspace-key": key };
+    if (json) headers["Content-Type"] = "application/json";
+    return headers;
   }
 
   async function loadTelegramStatus() {
@@ -178,7 +180,7 @@ export default function AccountTools() {
     </> : <>
       <p className="text-[10px] leading-5 text-slate-500">اربط حسابك مرة واحدة فقط. لا يحتاج الخادم إلى اتصال وارد من الإنترنت؛ يتصل هو بواجهة Telegram Bot API فقط.</p>
       <div className="mt-3 flex gap-2">
-        <button type="button" disabled={telegramBusy || telegramStatus?.configured === false} onClick={() => void linkTelegram()} className="gold-action flex h-10 flex-1 items-center justify-center gap-2 rounded-xl text-[10px] font-black disabled:opacity-35"><Link2 size={13} />ربط تيليغرام</button>
+        <button type="button" disabled={telegramBusy || telegramStatus?.configured !== true} onClick={() => void linkTelegram()} className="gold-action flex h-10 flex-1 items-center justify-center gap-2 rounded-xl text-[10px] font-black disabled:opacity-35"><Link2 size={13} />ربط تيليغرام</button>
         <button type="button" disabled={telegramBusy} onClick={() => void loadTelegramStatus()} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-400"><RefreshCcw size={13} /></button>
       </div>
       {telegramLinkCode && <div className="mt-3 rounded-xl border border-[#c7b27a]/15 bg-[#c7b27a]/5 p-3 text-center"><div className="text-[9px] text-slate-500">رمز الربط المؤقت</div><div className="mt-1 font-mono text-base font-black tracking-[0.2em] text-[#e0cd99]">{telegramLinkCode}</div></div>}
