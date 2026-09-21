@@ -12,6 +12,7 @@ const ATTACH_DIR = path.join(DATA_DIR, "attachments");
 const DB_PATH = path.join(DATA_DIR, "operations.sqlite");
 const SEED_PATH = path.join(DATA_DIR, "seed-snapshot.json");
 const UPSTREAM_MANIFEST_PATH = path.join(DATA_DIR, "upstream-attachments.json");
+const UPSTREAM_IMPORT_MARKER = path.join(DATA_DIR, "upstream-imported.json");
 const PORT = Number(process.env.PORT || 8080);
 const EXPECTED_HASH = process.env.WORKSPACE_KEY_HASH || "ec46eb36bb7e5a949866c89c1df8fd2bda7546511b21106c0bf8c82a1a0a10b0";
 const UPSTREAM_SYNC_ENDPOINT = (process.env.UPSTREAM_SYNC_ENDPOINT || "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync").replace(/\/+$/, "");
@@ -150,6 +151,24 @@ async function migrateUpstreamAttachments(key){
   console.log(`attachment migration complete ${copied}/${manifest.length}`);
   return {copied,total:manifest.length};
 }
+async function importUpstreamSnapshotOnce(key){
+  if(fs.existsSync(UPSTREAM_IMPORT_MARKER)) return {imported:false,reason:"already_imported"};
+  try {
+    const response=await fetch(`${UPSTREAM_SYNC_ENDPOINT}?state=1&_=${Date.now()}`,{cache:"no-store",headers:{"x-workspace-key":key}});
+    if(!response.ok) return {imported:false,reason:`upstream_${response.status}`};
+    const upstream=await response.json();
+    if(!upstream?.payload || !Number.isFinite(Number(upstream.revision))) return {imported:false,reason:"invalid_upstream"};
+    const current=currentRow();
+    if(Number(upstream.revision)>=Number(current.revision)) writeRow(upstream.payload,Number(upstream.revision));
+    const marker={at:new Date().toISOString(),upstreamRevision:Number(upstream.revision),localRevision:currentRow().revision};
+    fs.writeFileSync(UPSTREAM_IMPORT_MARKER,JSON.stringify(marker,null,2),{mode:0o600});
+    console.log("upstream snapshot import complete",marker);
+    return {imported:true,...marker};
+  } catch(error) {
+    console.error("upstream snapshot import failed",error);
+    return {imported:false,reason:"upstream_error"};
+  }
+}
 async function readJsonBody(req){
   const chunks=[]; for await (const c of req) chunks.push(c);
   return JSON.parse(Buffer.concat(chunks).toString("utf8")||"{}");
@@ -159,10 +178,11 @@ async function handleApi(req,res,url){
   if(!authorized(req)) return sendJson(res,{error:"unauthorized"},401);
   const workspaceKey=String(req.headers["x-workspace-key"]||"");
   if(url.searchParams.get("verify")==="1"){
+    const upstreamImport=await importUpstreamSnapshotOnce(workspaceKey);
     if(!attachmentMigrationPromise){
       attachmentMigrationPromise=migrateUpstreamAttachments(workspaceKey).finally(()=>{ attachmentMigrationPromise=null; });
     }
-    return sendJson(res,{ok:true});
+    return sendJson(res,{ok:true,revision:currentRow().revision,upstreamImport});
   }
   const attachment=url.searchParams.get("attachment");
   if(attachment==="sign-upload" && req.method==="POST") return sendJson(res,{error:"local_simple_upload_only"},501);
@@ -210,7 +230,11 @@ function serveStatic(req,res,url){
   if(rel==="/") rel="/index.html";
   let target=path.resolve(STATIC_DIR,"."+rel);
   if(!target.startsWith(STATIC_DIR)) { res.writeHead(403); return res.end("Forbidden"); }
-  if(!fs.existsSync(target) || fs.statSync(target).isDirectory()) target=path.join(STATIC_DIR,"index.html");
+  if(!fs.existsSync(target) || fs.statSync(target).isDirectory()){
+    const index=path.join(STATIC_DIR,"index.html");
+    const shell=path.join(STATIC_DIR,"_shell.html");
+    target=fs.existsSync(index)?index:shell;
+  }
   if(!fs.existsSync(target)){ res.writeHead(503,{"Content-Type":"text/plain"}); return res.end("Application build not found"); }
   const ext=path.extname(target).toLowerCase();
   res.writeHead(200,{"Content-Type":mime[ext]||"application/octet-stream","Cache-Control":ext===".html"?"no-store":"public, max-age=3600"});
