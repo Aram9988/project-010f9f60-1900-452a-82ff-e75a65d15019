@@ -11,8 +11,11 @@ const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(ROOT, "data"));
 const ATTACH_DIR = path.join(DATA_DIR, "attachments");
 const DB_PATH = path.join(DATA_DIR, "operations.sqlite");
 const SEED_PATH = path.join(DATA_DIR, "seed-snapshot.json");
+const UPSTREAM_MANIFEST_PATH = path.join(DATA_DIR, "upstream-attachments.json");
 const PORT = Number(process.env.PORT || 8080);
 const EXPECTED_HASH = process.env.WORKSPACE_KEY_HASH || "ec46eb36bb7e5a949866c89c1df8fd2bda7546511b21106c0bf8c82a1a0a10b0";
+const UPSTREAM_SYNC_ENDPOINT = (process.env.UPSTREAM_SYNC_ENDPOINT || "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync").replace(/\/+$/, "");
+let attachmentMigrationPromise = null;
 
 fs.mkdirSync(ATTACH_DIR, { recursive: true });
 const db = new DatabaseSync(DB_PATH);
@@ -115,6 +118,38 @@ function localAttachmentFile(objectPath){
   if(!objectPath.startsWith("attachments/") || objectPath.includes("..")) return null;
   return path.join(DATA_DIR, objectPath);
 }
+function attachmentManifest(){
+  try {
+    const parsed=JSON.parse(fs.readFileSync(UPSTREAM_MANIFEST_PATH,"utf8"));
+    return Array.isArray(parsed) ? parsed.filter((item)=>item && typeof item.name==="string") : [];
+  } catch { return []; }
+}
+async function cacheUpstreamAttachment(objectPath,key,expectedSize){
+  const target=localAttachmentFile(objectPath);
+  if(!target) return false;
+  if(fs.existsSync(target) && (!expectedSize || fs.statSync(target).size===Number(expectedSize))) return true;
+  const params=new URLSearchParams({attachment:"download",path:objectPath,name:path.basename(objectPath)});
+  const response=await fetch(`${UPSTREAM_SYNC_ENDPOINT}?${params.toString()}`,{headers:{"x-workspace-key":key}});
+  if(!response.ok) return false;
+  const bytes=Buffer.from(await response.arrayBuffer());
+  if(expectedSize && bytes.length!==Number(expectedSize)) throw new Error(`attachment_size_mismatch:${objectPath}`);
+  fs.mkdirSync(path.dirname(target),{recursive:true});
+  const temp=`${target}.part-${process.pid}`;
+  fs.writeFileSync(temp,bytes);
+  fs.renameSync(temp,target);
+  return true;
+}
+async function migrateUpstreamAttachments(key){
+  const manifest=attachmentManifest();
+  if(!manifest.length) return {copied:0,total:0};
+  let copied=0;
+  for(const item of manifest){
+    try { if(await cacheUpstreamAttachment(item.name,key,item.size)) copied+=1; }
+    catch(error){ console.error("attachment migration failed",item.name,error); }
+  }
+  console.log(`attachment migration complete ${copied}/${manifest.length}`);
+  return {copied,total:manifest.length};
+}
 async function readJsonBody(req){
   const chunks=[]; for await (const c of req) chunks.push(c);
   return JSON.parse(Buffer.concat(chunks).toString("utf8")||"{}");
@@ -122,7 +157,13 @@ async function readJsonBody(req){
 async function handleApi(req,res,url){
   if(req.method==="OPTIONS"){ res.writeHead(204,cors()); return res.end(); }
   if(!authorized(req)) return sendJson(res,{error:"unauthorized"},401);
-  if(url.searchParams.get("verify")==="1") return sendJson(res,{ok:true});
+  const workspaceKey=String(req.headers["x-workspace-key"]||"");
+  if(url.searchParams.get("verify")==="1"){
+    if(!attachmentMigrationPromise){
+      attachmentMigrationPromise=migrateUpstreamAttachments(workspaceKey).finally(()=>{ attachmentMigrationPromise=null; });
+    }
+    return sendJson(res,{ok:true});
+  }
   const attachment=url.searchParams.get("attachment");
   if(attachment==="sign-upload" && req.method==="POST") return sendJson(res,{error:"local_simple_upload_only"},501);
   if(attachment==="upload" && req.method==="POST"){
@@ -139,7 +180,9 @@ async function handleApi(req,res,url){
   if(attachment==="download" && req.method==="GET"){
     const objectPath=url.searchParams.get("path")||"";
     const target=localAttachmentFile(objectPath);
-    if(!target || !fs.existsSync(target)) return sendJson(res,{error:"attachment_not_found"},404);
+    if(!target) return sendJson(res,{error:"attachment_not_found"},404);
+    if(!fs.existsSync(target)) await cacheUpstreamAttachment(objectPath,workspaceKey);
+    if(!fs.existsSync(target)) return sendJson(res,{error:"attachment_not_found"},404);
     const name=safeName(url.searchParams.get("name")||path.basename(target));
     res.writeHead(200,cors({"Content-Type":"application/octet-stream","Content-Disposition":`inline; filename*=UTF-8''${encodeURIComponent(name)}`,"Content-Length":String(fs.statSync(target).size)}));
     return fs.createReadStream(target).pipe(res);
