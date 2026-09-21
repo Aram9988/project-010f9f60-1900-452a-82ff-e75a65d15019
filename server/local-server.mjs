@@ -224,6 +224,16 @@ async function handleTelegramApi(req, res, url) {
     db.prepare("delete from telegram_link_codes where user_id=?").run(userId);
     return sendJson(res, { ok: true });
   }
+  if (url.pathname === "/api/telegram/test" && req.method === "POST") {
+    if (!configured) return sendJson(res, { error: "telegram_not_configured" }, 503);
+    const body = await readJsonBody(req);
+    const userId = String(body?.userId || "");
+    if (!telegramUserExists(userId)) return sendJson(res, { error: "user_not_found" }, 404);
+    const link = db.prepare("select chat_id from telegram_links where user_id=?").get(userId);
+    if (!link?.chat_id) return sendJson(res, { error: "telegram_not_linked" }, 409);
+    await sendTelegram(link.chat_id, "اختبار ناجح ✅\n\nتم ربط حسابك بمنظومة فرع اتصالات ريف دمشق بنجاح، وإشعارات النظام عبر تيليغرام تعمل بشكل صحيح.");
+    return sendJson(res, { ok: true });
+  }
   return sendJson(res, { error: "method_not_allowed" }, 405);
 }
 
