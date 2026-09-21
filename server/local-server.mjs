@@ -90,13 +90,46 @@ function currentRow() {
   const row = db.prepare("select payload,revision,updated_at from shared_snapshot where id=?").get("main");
   return { payload: JSON.parse(row.payload), revision: Number(row.revision), updated_at: row.updated_at };
 }
+function inferNoticeSender(payload, notice) {
+  if (notice?.fromUserId) return notice.fromUserId;
+  const tasks = arrayOf(payload?.app?.tasks);
+  const task = notice?.taskId ? tasks.find((item) => item.id === notice.taskId) : undefined;
+  if (!task) return undefined;
+
+  const noticeAt = Date.parse(notice.at || "") || 0;
+  const candidates = arrayOf(task.updates)
+    .map((update) => ({
+      authorId: update.authorId,
+      at: Date.parse(update.editedAt || update.at || "") || 0,
+    }))
+    .filter((update) => update.authorId && (!noticeAt || update.at <= noticeAt + 3000))
+    .sort((a, b) => b.at - a.at);
+
+  if (candidates[0]?.authorId) return candidates[0].authorId;
+  if (typeof task.issuedById === "string" && task.issuedById) return task.issuedById;
+  return undefined;
+}
+function enrichNoticeSenders(payload) {
+  const app = payload?.app;
+  if (!app || !Array.isArray(app.notices)) return payload;
+  let changed = false;
+  const notices = app.notices.map((notice) => {
+    if (!notice || notice.fromUserId) return notice;
+    const fromUserId = inferNoticeSender(payload, notice);
+    if (!fromUserId) return notice;
+    changed = true;
+    return { ...notice, fromUserId };
+  });
+  return changed ? { ...payload, app: { ...app, notices } } : payload;
+}
 function writeRow(payload, revision, notifyTelegram = true) {
   const previous = currentRow().payload;
+  const enrichedPayload = enrichNoticeSenders(payload);
   const updatedAt = new Date().toISOString();
   db.prepare("update shared_snapshot set payload=?, revision=?, updated_at=? where id=?")
-    .run(JSON.stringify(payload), revision, updatedAt, "main");
-  if (notifyTelegram) void dispatchTelegramNotices(previous, payload);
-  return { payload, revision, updated_at: updatedAt };
+    .run(JSON.stringify(enrichedPayload), revision, updatedAt, "main");
+  if (notifyTelegram) void dispatchTelegramNotices(previous, enrichedPayload);
+  return { payload: enrichedPayload, revision, updated_at: updatedAt };
 }
 function arrayOf(value) { return Array.isArray(value) ? value.filter((x)=>x && typeof x === "object") : []; }
 function byId(items) { const m=new Map(); for(const x of items){ if(typeof x.id==="string" && x.id) m.set(x.id,x); } return m; }
