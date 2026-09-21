@@ -125,6 +125,30 @@ export default function AccountTools() {
     } finally { setTelegramBusy(false); }
   }
 
+  async function testTelegram() {
+    if (!sessionUserId) return;
+    setTelegramBusy(true);
+    try {
+      const res = await fetch("/api/telegram/test", {
+        method: "POST",
+        headers: telegramHeaders(true),
+        body: JSON.stringify({ userId: sessionUserId }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (res.ok && data.ok) {
+        setMessage("تم إرسال إشعار تجريبي إلى تيليغرام بنجاح.");
+      } else if (data.error === "telegram_not_linked") {
+        setMessage("حساب تيليغرام غير مرتبط بعد.");
+      } else {
+        setMessage("تعذر إرسال الإشعار التجريبي حالياً.");
+      }
+    } catch {
+      setMessage("تعذر الاتصال بخدمة تيليغرام حالياً.");
+    } finally {
+      setTelegramBusy(false);
+    }
+  }
+
   async function chooseAvatar(file?: File) {
     if (!user || !file) return;
     if (!file.type.startsWith("image/")) { setMessage("يرجى اختيار صورة فقط."); return; }
@@ -176,7 +200,10 @@ export default function AccountTools() {
     </div>
     {telegramStatus?.configured === false ? <p className="text-[10px] leading-5 text-slate-500">البوت غير مفعّل على الخادم بعد. بعد إدخال Bot Token سيصبح الربط متاحاً مباشرة.</p> : telegramStatus?.linked ? <>
       <p className="text-[10px] leading-5 text-slate-400">سيتم إرسال إشعارات المهام والمشاريع وطلبات الاتصال إلى تيليغرام تلقائياً{telegramStatus.telegramUsername ? ` — @${telegramStatus.telegramUsername}` : ""}.</p>
-      <button type="button" disabled={telegramBusy} onClick={() => void unlinkTelegram()} className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-rose-300/15 px-3 text-[10px] font-black text-rose-300 disabled:opacity-40"><Unlink size={13} />إلغاء الربط</button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={telegramBusy} onClick={() => void testTelegram()} className="gold-action inline-flex h-10 items-center gap-2 rounded-xl px-3 text-[10px] font-black disabled:opacity-40"><Send size={13} />إرسال إشعار تجريبي</button>
+        <button type="button" disabled={telegramBusy} onClick={() => void unlinkTelegram()} className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-300/15 px-3 text-[10px] font-black text-rose-300 disabled:opacity-40"><Unlink size={13} />إلغاء الربط</button>
+      </div>
     </> : <>
       <p className="text-[10px] leading-5 text-slate-500">اربط حسابك مرة واحدة فقط. لا يحتاج الخادم إلى اتصال وارد من الإنترنت؛ يتصل هو بواجهة Telegram Bot API فقط.</p>
       <div className="mt-3 flex gap-2">
