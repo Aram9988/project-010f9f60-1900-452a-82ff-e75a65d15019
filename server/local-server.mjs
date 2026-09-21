@@ -1,4 +1,5 @@
 import http from "node:http";
+import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -14,6 +15,8 @@ const SEED_PATH = path.join(DATA_DIR, "seed-snapshot.json");
 const UPSTREAM_MANIFEST_PATH = path.join(DATA_DIR, "upstream-attachments.json");
 const UPSTREAM_IMPORT_MARKER = path.join(DATA_DIR, "upstream-imported.json");
 const PORT = Number(process.env.PORT || 8080);
+const TLS_CERT_PATH = (process.env.TLS_CERT_PATH || "").trim();
+const TLS_KEY_PATH = (process.env.TLS_KEY_PATH || "").trim();
 const EXPECTED_HASH = process.env.WORKSPACE_KEY_HASH || "ec46eb36bb7e5a949866c89c1df8fd2bda7546511b21106c0bf8c82a1a0a10b0";
 const UPSTREAM_SYNC_ENDPOINT = (process.env.UPSTREAM_SYNC_ENDPOINT || "https://fxpnnmtlopuunptiaval.supabase.co/functions/v1/workspace-sync").replace(/\/+$/, "");
 const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
@@ -437,10 +440,10 @@ function serveStatic(req,res,url){
   res.writeHead(200,{"Content-Type":mime[ext]||"application/octet-stream","Cache-Control":ext===".html"?"no-store":"public, max-age=3600"});
   fs.createReadStream(target).pipe(res);
 }
-const server=http.createServer(async(req,res)=>{
+const requestHandler=async(req,res)=>{
   try{
     const url=new URL(req.url||"/","http://localhost");
-    if(url.pathname==="/health") return sendJson(res,{ok:true,service:"operations-app",telegramConfigured:Boolean(TELEGRAM_BOT_TOKEN),time:new Date().toISOString()});
+    if(url.pathname==="/health") return sendJson(res,{ok:true,service:"operations-app",telegramConfigured:Boolean(TELEGRAM_BOT_TOKEN),tls:Boolean(TLS_CERT_PATH && TLS_KEY_PATH),time:new Date().toISOString()});
     if(url.pathname==="/api/workspace-sync") return await handleApi(req,res,url);
     if(url.pathname.startsWith("/api/telegram/")) return await handleTelegramApi(req,res,url);
     return serveStatic(req,res,url);
@@ -448,8 +451,12 @@ const server=http.createServer(async(req,res)=>{
     console.error(error);
     if(!res.headersSent) sendJson(res,{error:"internal_error"},500); else res.end();
   }
-});
+};
+const tlsEnabled = Boolean(TLS_CERT_PATH && TLS_KEY_PATH);
+const server = tlsEnabled
+  ? https.createServer({ cert: fs.readFileSync(TLS_CERT_PATH), key: fs.readFileSync(TLS_KEY_PATH) }, requestHandler)
+  : http.createServer(requestHandler);
 server.listen(PORT,"0.0.0.0",()=>{
-  console.log(`operations-app listening on 0.0.0.0:${PORT}`);
+  console.log(`operations-app listening on ${tlsEnabled ? "https" : "http"}://0.0.0.0:${PORT}`);
   if (TELEGRAM_BOT_TOKEN) void telegramPollLoop();
 });
